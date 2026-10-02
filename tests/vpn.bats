@@ -161,6 +161,24 @@ setup_conf() {
 }
 
 @test "main sem argumento e com stdin fechado não loopa infinito" {
-  run bash -c "'$VPN' </dev/null"
-  [ "$status" -ne 0 ]   # sem entrada → erro controlado, não hang
+  # TSV fixture garante que render_menu passa e o caminho real de EOF (read) é exercitado;
+  # timeout 5 aborta num eventual loop de EOF (rc 124 ≠ 1 → falha).
+  run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' timeout 5 '$VPN' </dev/null"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"entrada inválida"* ]]
+}
+
+@test "menu com TSV inexistente falha com erro de leitura sem loop" {
+  run bash -c "TSV=/nonexistent/x.tsv '$VPN' </dev/null"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"não foi possível ler"* ]]
+}
+
+@test "menu_interativo caminho feliz: escolha numérica troca endpoint" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$BATS_TEST_TMPDIR'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    menu_interativo <<< '2'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: france"* ]]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
 }
