@@ -30,6 +30,7 @@ load_fixture_tsv() {
   load_fixture_tsv
   run bash -c "source '$VPN'; TSV='$TSV'; endpoint_exists france; echo \$?"
   [ "$status" -eq 0 ]
+  [ "$output" == "0" ]
 }
 
 @test "endpoint_exists falha para id ausente" {
@@ -40,7 +41,14 @@ load_fixture_tsv() {
 
 @test "endpoint_get devolve host/ip/porta do id" {
   load_fixture_tsv
-  run bash -c "source '$VPN'; TSV='$TSV'; endpoint_get france host; endpoint_get france ip; endpoint_get france porta"
+  run bash -c "source '$VPN'; TSV='$TSV'; endpoint_get france host; endpoint_get france ip; endpoint_get france porta; endpoint_get france proto; endpoint_get france status"
   [ "$status" -eq 0 ]
-  [ "$output" == $'fr.jumptoserver.com\n146.70.40.99\n4443' ]
+  [ "$output" == $'fr.jumptoserver.com\n146.70.40.99\n4443\nudp\nok' ]
+}
+
+@test "endpoint_get rejeita coluna desconhecida" {
+  load_fixture_tsv
+  run bash -c "source '$VPN'; TSV='$TSV'; endpoint_get france coluna-x"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"coluna desconhecida"* ]]
 }
