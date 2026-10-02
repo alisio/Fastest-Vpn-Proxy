@@ -94,7 +94,8 @@ setup_conf() {
 @test "generate_confs remove CR (\r) das linhas" {
   setup_conf
   run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; generate_confs australia '$SRC' '$OUT'"
-  ! grep -q $'\r' "$OUT/custom.conf"
+  run grep -q $'\r' "$OUT/custom.conf"
+  [ "$status" -ne 0 ]
 }
 
 @test "generate_confs falha se id não existe na tsv" {
