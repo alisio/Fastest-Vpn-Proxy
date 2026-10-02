@@ -13,7 +13,7 @@ EOF
 main() {
   case "${1:-}" in
     -h|--help) uso ;;
-    *) uso; return 1 ;;
+    *) uso >&2; return 1 ;;
   esac
 }
 
