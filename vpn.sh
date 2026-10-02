@@ -89,14 +89,15 @@ curl_test() {
 }
 
 _backup_confs() {  # $1=dir_destino
-  local f
+  local f ret=0
   for f in custom.conf custom-ru.conf; do
     if [ -f "$1/$f" ]; then
-      cp "$1/$f" "$1/$f.bak"
+      cp "$1/$f" "$1/$f.bak" || ret=1
     else
-      rm -f "$1/$f.bak"
+      rm -f "$1/$f.bak" || ret=1
     fi
   done
+  return "$ret"
 }
 
 _restore_confs() {  # $1=dir_destino
@@ -122,14 +123,18 @@ cmd_switch() {  # $1=id
   dest="${CONF_DEST:-$SCRIPT_DIR}"
   [ -f "$src" ] || { echo "erro: cache não encontrado: $src — rode ./vpn.sh update" >&2; return 1; }
   mkdir -p "$dest"
-  _backup_confs "$dest"
+  if ! _backup_confs "$dest"; then
+    echo "erro: falha ao criar backup em $dest" >&2
+    return 1
+  fi
   if ! generate_confs "$id" "$src" "$dest"; then
-    _restore_confs "$dest"
+    _restore_confs "$dest" || echo "aviso: falha ao restaurar configurações em $dest" >&2
     return 1
   fi
   if ! run_docker_up || ! wait_healthy || ! curl_test; then
     echo "erro: troca para '$id' falhou — restaurando configurações anteriores" >&2
-    _restore_confs "$dest"
+    _restore_confs "$dest" || echo "aviso: falha ao restaurar configurações em $dest" >&2
+    run_docker_up || echo "aviso: falha ao recriar container com confs restauradas" >&2
     return 1
   fi
   _cleanup_backups "$dest"

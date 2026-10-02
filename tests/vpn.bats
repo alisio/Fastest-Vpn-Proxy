@@ -133,3 +133,20 @@ setup_conf() {
   [ ! -e "$OUT/custom.conf.bak" ]
   [ ! -e "$OUT/custom-ru.conf.bak" ]
 }
+
+@test "cmd_switch restaura confs e recria container quando health ok mas curl falha" {
+  OUT="$BATS_TEST_TMPDIR"
+  LOG="$BATS_TEST_TMPDIR/docker.log"
+  echo "PRE-CONTEUDO" > "$OUT/custom.conf"
+  echo "PRE-CONTEUDO-RU" > "$OUT/custom-ru.conf"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo docker >> $LOG'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 000'; \
+    cmd_switch france"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"restaurando configurações anteriores"* ]]
+  [ "$(cat "$OUT/custom.conf")" == "PRE-CONTEUDO" ]
+  [ "$(cat "$OUT/custom-ru.conf")" == "PRE-CONTEUDO-RU" ]
+  [ ! -e "$OUT/custom.conf.bak" ]
+  [ ! -e "$OUT/custom-ru.conf.bak" ]
+  [ "$(grep -c docker "$LOG")" -eq 2 ]
+}
