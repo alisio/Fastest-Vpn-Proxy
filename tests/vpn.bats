@@ -20,3 +20,27 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"Uso:"* ]]
 }
+
+load_fixture_tsv() {
+  TSV="$BATS_TEST_TMPDIR/endpoints.tsv"
+  cp "$BATS_TEST_DIRNAME/fixtures/endpoints.tsv" "$TSV"
+}
+
+@test "endpoint_exists encontra id presente" {
+  load_fixture_tsv
+  run bash -c "source '$VPN'; TSV='$TSV'; endpoint_exists france; echo \$?"
+  [ "$status" -eq 0 ]
+}
+
+@test "endpoint_exists falha para id ausente" {
+  load_fixture_tsv
+  run bash -c "source '$VPN'; TSV='$TSV'; endpoint_exists marte; echo \$?"
+  [ "$output" == "1" ]
+}
+
+@test "endpoint_get devolve host/ip/porta do id" {
+  load_fixture_tsv
+  run bash -c "source '$VPN'; TSV='$TSV'; endpoint_get france host; endpoint_get france ip; endpoint_get france porta"
+  [ "$status" -eq 0 ]
+  [ "$output" == $'fr.jumptoserver.com\n146.70.40.99\n4443' ]
+}
