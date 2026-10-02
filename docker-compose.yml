@@ -1,0 +1,26 @@
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: opencode-fastest-proxy
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "127.0.0.1:8888:8888" # proxy HTTP só no loopback do host
+    volumes:
+      - ./custom-ru.conf:/gluetun/custom.conf:ro # derivado de custom.conf com IP literal (gluetun exige)
+    env_file:
+      - .env # OPENVPN_USER/PASSWORD (600, fora de versionamento)
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=openvpn
+      - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf
+      # OPENVPN_USER e OPENVPN_PASSWORD injetados no `docker compose up`
+      # a partir de ~/.secrets/fastestvpn.txt (não versionar, não imprimir)
+      - HTTPPROXY=on
+      - HTTPPROXY_PORT=8888
+      - HTTPPROXY_LOG=off
+      - FIREWALL_INPUT_PORTS=8888
+      - UPDATER_PERIOD=24h
+    restart: unless-stopped
