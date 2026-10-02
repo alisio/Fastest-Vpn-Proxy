@@ -141,9 +141,29 @@ cmd_switch() {  # $1=id
   echo "endpoint ativo: $id"
 }
 
+render_menu() {  # imprime menu numerado (id + status), pulando o cabeçalho
+  awk -F'\t' 'NR>1 {printf "%d) %s\t%s\n", ++n, $1, $6}' "$TSV"
+}
+
+menu_interativo() {  # sem argumento: mostra o menu e troca para a escolha
+  local escolha id
+  render_menu || { echo "erro: não foi possível ler $TSV — rode ./vpn.sh update" >&2; return 1; }
+  if ! IFS= read -r escolha; then
+    echo "erro: entrada inválida" >&2
+    return 1
+  fi
+  id=$(awk -F'\t' -v n="$escolha" 'NR>1 && ++c==n {print $1; exit}' "$TSV")
+  if [ -z "$id" ]; then
+    echo "erro: entrada inválida: $escolha" >&2
+    return 1
+  fi
+  cmd_switch "$id"
+}
+
 main() {
   case "${1:-}" in
     -h|--help) uso ;;
+    "") menu_interativo ;;
     *) uso >&2; return 1 ;;
   esac
 }

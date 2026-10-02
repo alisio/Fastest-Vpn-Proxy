@@ -150,3 +150,17 @@ setup_conf() {
   [ ! -e "$OUT/custom-ru.conf.bak" ]
   [ "$(grep -c docker "$LOG")" -eq 2 ]
 }
+
+@test "render_menu lista ids numerados com status" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; render_menu"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1) australia"* ]]
+  [[ "$output" == *"2) france"* ]]
+  [[ "$output" == *"ok"* ]]
+  [[ "$output" == *"ambiguo"* ]]
+}
+
+@test "main sem argumento e com stdin fechado não loopa infinito" {
+  run bash -c "'$VPN' </dev/null"
+  [ "$status" -ne 0 ]   # sem entrada → erro controlado, não hang
+}
