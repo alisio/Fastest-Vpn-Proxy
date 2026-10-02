@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 uso() {
   cat <<'EOF'
@@ -19,5 +18,6 @@ main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -euo pipefail
   main "$@"
 fi

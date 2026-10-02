@@ -14,3 +14,9 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Uso:"* ]]
 }
+
+@test "vpn.sh com argumento desconhecido exibe uso e sai com 1" {
+  run "$VPN" argumento-inexistente
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Uso:"* ]]
+}
