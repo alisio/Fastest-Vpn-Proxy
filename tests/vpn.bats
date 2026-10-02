@@ -103,3 +103,33 @@ setup_conf() {
   run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; generate_confs marte '$SRC' '$OUT'"
   [ "$status" -ne 0 ]
 }
+
+@test "cmd_switch recusa id desconhecido sem chamar docker" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; DOCKER_CMD='echo DOCKER_CHAMADO'; cmd_switch marte"
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"DOCKER_CHAMADO"* ]]
+  [[ "$output" == *"não existe"* ]]
+}
+
+@test "cmd_switch aceita id conhecido e invoca docker (stub)" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$BATS_TEST_TMPDIR'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch france"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+}
+
+@test "cmd_switch restaura confs quando docker falha" {
+  OUT="$BATS_TEST_TMPDIR"
+  echo "PRE-CONTEUDO" > "$OUT/custom.conf"
+  echo "PRE-CONTEUDO-RU" > "$OUT/custom-ru.conf"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='false'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch france"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"restaurando configurações anteriores"* ]]
+  [ "$(cat "$OUT/custom.conf")" == "PRE-CONTEUDO" ]
+  [ "$(cat "$OUT/custom-ru.conf")" == "PRE-CONTEUDO-RU" ]
+  [ ! -e "$OUT/custom.conf.bak" ]
+  [ ! -e "$OUT/custom-ru.conf.bak" ]
+}
