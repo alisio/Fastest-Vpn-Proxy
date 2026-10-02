@@ -26,6 +26,12 @@ Uso: vpn.sh [update | <id> | status | --help]
 EOF
 }
 
+DEFAULT_ENDPOINT="australia"
+
+default_endpoint() {
+  echo "${VPN_ENDPOINT:-$DEFAULT_ENDPOINT}"
+}
+
 main() {
   case "${1:-}" in
     -h|--help) uso ;;

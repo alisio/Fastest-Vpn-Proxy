@@ -46,6 +46,18 @@ load_fixture_tsv() {
   [ "$output" == $'fr.jumptoserver.com\n146.70.40.99\n4443\nudp\nok' ]
 }
 
+@test "default_endpoint usa VPN_ENDPOINT quando definido" {
+  run bash -c "source '$VPN'; VPN_ENDPOINT=france; default_endpoint"
+  [ "$status" -eq 0 ]
+  [ "$output" == "france" ]
+}
+
+@test "default_endpoint cai para australia sem VPN_ENDPOINT" {
+  run bash -c "source '$VPN'; unset VPN_ENDPOINT; default_endpoint"
+  [ "$status" -eq 0 ]
+  [ "$output" == "australia" ]
+}
+
 @test "endpoint_get rejeita coluna desconhecida" {
   load_fixture_tsv
   run bash -c "source '$VPN'; TSV='$TSV'; endpoint_get france coluna-x"
