@@ -64,3 +64,41 @@ load_fixture_tsv() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"coluna desconhecida"* ]]
 }
+
+setup_conf() {
+  SRC="$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn"
+  OUT="$BATS_TEST_TMPDIR"
+}
+
+@test "generate_confs custom.conf usa hostname com porta da tsv" {
+  setup_conf
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; generate_confs australia '$SRC' '$OUT'"
+  [ "$status" -eq 0 ]
+  grep -q "^remote auau.jumptoserver.com 4443$" "$OUT/custom.conf"
+}
+
+@test "generate_confs custom-ru.conf usa IP literal" {
+  setup_conf
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; generate_confs australia '$SRC' '$OUT'"
+  [ "$status" -eq 0 ]
+  grep -q "^remote 46.102.153.133 4443$" "$OUT/custom-ru.conf"
+}
+
+@test "generate_confs aponta auth-user-pass para /gluetun/auth e injeta script-security" {
+  setup_conf
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; generate_confs australia '$SRC' '$OUT'"
+  grep -q "^auth-user-pass /gluetun/auth$" "$OUT/custom.conf"
+  grep -q "^script-security 2$" "$OUT/custom.conf"
+}
+
+@test "generate_confs remove CR (\r) das linhas" {
+  setup_conf
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; generate_confs australia '$SRC' '$OUT'"
+  ! grep -q $'\r' "$OUT/custom.conf"
+}
+
+@test "generate_confs falha se id não existe na tsv" {
+  setup_conf
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; generate_confs marte '$SRC' '$OUT'"
+  [ "$status" -ne 0 ]
+}
