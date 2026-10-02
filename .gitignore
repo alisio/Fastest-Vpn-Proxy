@@ -1,2 +1,4 @@
 .env
 *.log
+docs/plans/
+.ovpn-cache/
