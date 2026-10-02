@@ -1,0 +1,4 @@
+id	host	ip	porta	proto	status	obs
+australia	auau.jumptoserver.com	46.102.153.133	4443	udp	ok	curl 200
+france	fr.jumptoserver.com	146.70.40.99	4443	udp	ok	curl 302
+germany-dus1	de-dus1.jumptoserver.com	213.202.223.32	4443	udp	ambiguo	curl 302 porem unhealthy
