@@ -160,6 +160,122 @@ menu_interativo() {  # sem argumento: mostra o menu e troca para a escolha
   cmd_switch "$id"
 }
 
+DEFAULT_RESOLVE_CMD="dig +short"
+
+parse_ovpn_core() {  # $1=arquivo.ovpn → stdout: host<TAB>porta<TAB>proto
+  local arquivo="$1" linha resto host="" porta="" proto=""
+  [ -f "$arquivo" ] || { echo "erro: arquivo não encontrado: $arquivo" >&2; return 1; }
+  while IFS= read -r linha || [ -n "$linha" ]; do
+    linha="${linha%$'\r'}"
+    case "$linha" in
+      remote\ *)
+        resto="${linha#remote }"
+        read -r host porta <<< "$resto"
+        ;;
+      proto\ *)
+        proto="${linha#proto }"
+        proto="${proto%%[[:space:]]*}"
+        ;;
+    esac
+  done < "$arquivo"
+  [ -n "$host" ] || { echo "erro: linha remote ausente em $arquivo" >&2; return 1; }
+  [ -n "$porta" ] || { echo "erro: porta do remote ausente em $arquivo" >&2; return 1; }
+  printf '%s\t%s\t%s\n' "$host" "$porta" "$proto"
+}
+
+resolve_ip() {  # $1=host → primeiro IP (vazio se resolução falhar)
+  local cmd="${RESOLVE_CMD:-$DEFAULT_RESOLVE_CMD}" out
+  out="$(eval "$cmd \"\$1\"" 2>/dev/null)" || out=""
+  out="${out%%[[:space:]]*}"
+  printf '%s\n' "$out"
+}
+
+merge_tsv() {  # $1=tsv_velho $2=dir_ovpn → nova tabela no stdout (preserva status)
+  local tsv="$1" dir="$2"
+  local arq id core host porta proto ip status obs antigo
+  [ -f "$tsv" ] || { echo "erro: tsv não encontrado: $tsv" >&2; return 1; }
+  [ -d "$dir" ] || { echo "erro: diretório de .ovpn não encontrado: $dir" >&2; return 1; }
+  head -n 1 "$tsv"
+  for arq in "$dir"/*.ovpn; do
+    [ -e "$arq" ] || { echo "erro: nenhum arquivo .ovpn em $dir" >&2; return 1; }
+    id="${arq##*/}"
+    id="${id%.ovpn}"
+    id="${id%-udp}"
+    core="$(parse_ovpn_core "$arq")" || return 1
+    IFS=$'\t' read -r host porta proto <<< "$core"
+    ip="$(resolve_ip "$host")"
+    antigo="$(awk -F'\t' -v id="$id" -v h="$host" -v p="$porta" '
+      NR > 1 && $1 == id {
+        if ($2 == h && $4 == p) { print $6; print $7 } else { print "nao-testado"; print "-" }
+        exit
+      }' "$tsv")"
+    if [ -n "$antigo" ]; then
+      status="${antigo%%$'\n'*}"
+      obs="${antigo#*$'\n'}"
+    else
+      status="nao-testado"
+      obs="-"
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$host" "$ip" "$porta" "$proto" "$status" "$obs"
+  done
+}
+
+PROVIDER_URL="${PROVIDER_URL:-https://support.fastestvpn.com/download/fastestvpn_ovpn/}"
+OVPN_CACHE_DIR="${OVPN_CACHE_DIR:-$SCRIPT_DIR/.ovpn-cache}"
+DEFAULT_DOWNLOAD_CMD="curl -sL $PROVIDER_URL -o"
+
+download_provider_zip() {  # $1=destino.zip
+  local cmd="${DOWNLOAD_CMD:-$DEFAULT_DOWNLOAD_CMD}"
+  eval "$cmd \"\$1\""
+}
+
+cmd_update() {
+  local tmpdir zip extracao dir_ovpn tsv_tmp cache
+  local n_total n_ok n_nao
+  tmpdir="$(mktemp -d)" || { echo "erro: não foi possível criar diretório temporário" >&2; return 1; }
+  zip="$tmpdir/provider.zip"
+  extracao="$tmpdir/extracao"
+  if ! download_provider_zip "$zip"; then
+    echo "erro: download do provedor falhou — tabela $TSV preservada" >&2
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  if ! unzip -q "$zip" -d "$extracao" 2>/dev/null; then
+    echo "erro: extração do zip falhou — tabela $TSV preservada" >&2
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  dir_ovpn="$extracao"
+  if [ -d "$extracao/udp_files" ]; then
+    dir_ovpn="$extracao/udp_files"
+  fi
+  tsv_tmp="$TSV.tmp"
+  if ! merge_tsv "$TSV" "$dir_ovpn" > "$tsv_tmp"; then
+    echo "erro: merge dos endpoints falhou — tabela $TSV preservada" >&2
+    rm -f "$tsv_tmp"
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  if ! mv -f "$tsv_tmp" "$TSV"; then
+    echo "erro: falha ao gravar $TSV" >&2
+    rm -f "$tsv_tmp"
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  cache="${OVPN_CACHE_DIR:-$SCRIPT_DIR/.ovpn-cache}"
+  if rm -rf "$cache" 2>/dev/null && mkdir -p "$cache" 2>/dev/null; then
+    cp "$dir_ovpn"/*.ovpn "$cache/" 2>/dev/null \
+      || echo "aviso: falha ao copiar .ovpn para $cache" >&2
+  else
+    echo "aviso: falha ao atualizar cache $cache" >&2
+  fi
+  n_total="$(awk 'END {print NR-1}' "$TSV")"
+  n_ok="$(awk -F'\t' 'NR>1 && $6=="ok" {n++} END {print n+0}' "$TSV")"
+  n_nao="$(awk -F'\t' 'NR>1 && $6=="nao-testado" {n++} END {print n+0}' "$TSV")"
+  echo "endpoints.tsv atualizada: total=$n_total ok=$n_ok nao-testado=$n_nao"
+  rm -rf "$tmpdir"
+}
+
 main() {
   case "${1:-}" in
     -h|--help) uso ;;

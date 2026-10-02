@@ -182,3 +182,51 @@ setup_conf() {
   [[ "$output" == *"endpoint ativo: france"* ]]
   [[ "$output" == *"DOCKER_CHAMADO"* ]]
 }
+
+@test "merge_tsv preserva status de host inalterado" {
+  run bash -c "source '$VPN'; RESOLVE_CMD='echo 1.2.3.4'; merge_tsv '$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' '$BATS_TEST_DIRNAME/fixtures/ovpn_novo'"
+  [ "$status" -eq 0 ]
+  # australia não aparece nos novos .ovpn? (aparece — fixture contém) → status ok preservado
+  [[ "$output" == *$'australia\tauau.jumptoserver.com'*"ok"* ]]
+}
+
+@test "merge_tsv marca altered como nao-testado" {
+  run bash -c "source '$VPN'; RESOLVE_CMD='echo 1.2.3.4'; merge_tsv '$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' '$BATS_TEST_DIRNAME/fixtures/ovpn_novo'"
+  [[ "$output" == *$'france\t'*"nao-testado"* ]]   # host novo na fixture
+}
+
+@test "merge_tsv adiciona id inédito como nao-testado" {
+  run bash -c "source '$VPN'; RESOLVE_CMD='echo 1.2.3.4'; merge_tsv '$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' '$BATS_TEST_DIRNAME/fixtures/ovpn_novo'"
+  [[ "$output" == *"noruega"* ]]
+  [[ "$output" == *"nao-testado"* ]]
+}
+
+setup_provider_zip() {
+  local build="$BATS_TEST_TMPDIR/zipbuild"
+  mkdir -p "$build/udp_files"
+  cp "$BATS_TEST_DIRNAME/fixtures/ovpn_novo/"*.ovpn "$build/udp_files/"
+  ZIP_FIX="$BATS_TEST_TMPDIR/provider.zip"
+  (cd "$build" && zip -qr "$ZIP_FIX" udp_files)
+}
+
+@test "cmd_update baixa zip, regenera tsv e descarta ids sem ovpn" {
+  setup_provider_zip
+  TSV_UP="$BATS_TEST_TMPDIR/endpoints.tsv"
+  cp "$BATS_TEST_DIRNAME/fixtures/endpoints.tsv" "$TSV_UP"
+  run bash -c "source '$VPN'; TSV='$TSV_UP'; OVPN_CACHE_DIR='$BATS_TEST_TMPDIR/cache'; RESOLVE_CMD='echo 1.2.3.4'; DOWNLOAD_CMD=\"cp '$ZIP_FIX'\"; cmd_update"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok=1"* ]]
+  [[ "$output" == *"nao-testado=2"* ]]
+  grep -q $'^noruega\t' "$TSV_UP"
+  run grep -q "germany-dus1" "$TSV_UP"
+  [ "$status" -ne 0 ]
+}
+
+@test "cmd_update com download falho preserva a tsv antiga" {
+  TSV_UP="$BATS_TEST_TMPDIR/endpoints.tsv"
+  cp "$BATS_TEST_DIRNAME/fixtures/endpoints.tsv" "$TSV_UP"
+  run bash -c "source '$VPN'; TSV='$TSV_UP'; OVPN_CACHE_DIR='$BATS_TEST_TMPDIR/cache'; DOWNLOAD_CMD='false'; cmd_update"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"download"* ]]
+  cmp -s "$TSV_UP" "$BATS_TEST_DIRNAME/fixtures/endpoints.tsv"
+}
