@@ -4,17 +4,18 @@ Projeto para criar o container `opencode-fastest-proxy`. Derivado de `~/docker/o
 
 ## Conteúdo
 - `docker-compose.yml`: `gluetun` (`qmcgaw/gluetun:latest`), `container_name: opencode-fastest-proxy`, `VPN_TYPE=openvpn`, `HTTPPROXY=on`, porta `127.0.0.1:8888` (`docker-compose.yml:10,21-22`).
-- `custom.conf`, `custom-ru.conf`: config OpenVPN (`remote 91.226.58.5 4443` em `custom-ru.conf:2`, `remote ru-vr.jumptoserver.com 4443` em `custom.conf:2`).
-- `.env`: `OPENVPN_USER` e `OPENVPN_PASSWORD` (`.env` no original). Não versionado — ver `.env.example`.
+- `custom.conf`: OpenVPN (`remote russia.jumptoserver.com 4443`, `proto udp` — conforme `default.ovpn`).
+- `custom-ru.conf`: mesmo conteúdo, `remote` com IP literal (`91.226.58.100`, resolvido de `russia.jumptoserver.com`).
+- `.env`: `OPENVPN_USER` / `OPENVPN_PASSWORD`. Não versionado; preenchido a partir de `~/.secrets/fastestvpn-user.txt` e `~/.secrets/fastestvpn-password.txt`.
 
 ## Pré-requisitos
 - `docker` + `docker compose`
-- Credenciais FastestVPN em `~/.secrets/fastestvpn.txt` (referência: `docker-compose.yml:20`)
+- Credenciais FastestVPN em `~/.secrets/fastestvpn-user.txt` / `fastestvpn-password.txt` (`.env` gerado a partir deles)
 
 ## Uso
 ```bash
 cp .env.example .env
-# preencher .env com valores de ~/.secrets/fastestvpn.txt
+# preencher .env a partir de ~/.secrets/fastestvpn-user.txt / fastestvpn-password.txt
 
 docker compose up -d
 docker compose logs --tail=50
