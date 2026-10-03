@@ -1,7 +1,6 @@
 id	host	ip	porta	proto	status	obs
-australia	auau.jumptoserver.com	46.102.153.133	4443	udp	ok	curl 200
 australia-stream	-	-	-	udp	nao-testado	-
-australia1	-	-	-	udp	nao-testado	-
+australia1	auau.jumptoserver.com	46.102.153.133	4443	udp	ok	curl 200
 austria-stream	at-stream.jumptoserver.com	185.126.236.73	4443	udp	falha	curl 500
 austria1	at-01.jumptoserver.com	185.126.236.73	4443	udp	falha	curl 500
 belgium-stream	bel-stream.jumptoserver.com	193.9.114.210	4443	udp	falha	curl timeout

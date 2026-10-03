@@ -52,10 +52,10 @@ load_fixture_tsv() {
   [ "$output" == "france" ]
 }
 
-@test "default_endpoint cai para australia sem VPN_ENDPOINT" {
+@test "default_endpoint cai para australia1 sem VPN_ENDPOINT" {
   run bash -c "source '$VPN'; unset VPN_ENDPOINT; default_endpoint"
   [ "$status" -eq 0 ]
-  [ "$output" == "australia" ]
+  [ "$output" == "australia1" ]
 }
 
 @test "endpoint_get rejeita coluna desconhecida" {
