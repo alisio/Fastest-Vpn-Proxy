@@ -29,7 +29,7 @@ cp .env.example .env
 
 - `endpoints.tsv`: tabela tab-separada com `id`, `host`, `ip`, `porta`, `proto`, `status` e `obs`; o `status` segue a semântica do `vpn.sh` (`curl_test` 200/302 + health: `ok` | `ambiguo` | `falha` | `nao-testado`), enquanto `resultados-teste-udp.md` é o relatório bruto dos testes, com vocabulário próprio (ex.: `FALHA`) e cobertura parcial dos endpoints.
 - Endpoints com status `falha`/`ambiguo` pedem confirmação antes da troca; `./vpn.sh <id> --force` pula a confirmação.
-- `VPN_ENDPOINT` (exemplo em `.env.example`): valor devolvido por `default_endpoint` (`vpn.sh`), com fallback `australia1`.
+- `VPN_ENDPOINT` (exemplo em `.env.example`): valor devolvido por `default_endpoint` (`vpn.sh`), com fallback `australia`.
 - Teste manual do proxy: `curl -x 127.0.0.1:8888 https://ifconfig.me`
 
 Ciclo de vida do container:
@@ -42,4 +42,4 @@ docker compose down
 Porta exposta: `127.0.0.1:8888`. Container precisa `NET_ADMIN` e `/dev/net/tun` (`docker-compose.yml:5-8`).
 
 ## Estado atual (verificado em 2026-10-02)
-Container `opencode-fastest-proxy` `healthy` (`docker ps`) com o endpoint `australia1` ativo (`custom.conf:2` — `remote auau.jumptoserver.com 4443`); resultados dos testes de endpoint em `resultados-teste-udp.md`.
+Container `opencode-fastest-proxy` `healthy` (`docker ps`) com o endpoint `australia` ativo (`custom.conf:2` — `remote auau.jumptoserver.com 4443`); resultados dos testes de endpoint em `resultados-teste-udp.md`.

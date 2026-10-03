@@ -44,7 +44,7 @@ Uso: vpn.sh [update | <id> [--force] | status | --help]
 EOF
 }
 
-DEFAULT_ENDPOINT="australia1"
+DEFAULT_ENDPOINT="australia"
 
 generate_confs() {  # $1=id $2=origem.ovpn $3=dir_destino
   local id="$1" src="$2" dest="$3"

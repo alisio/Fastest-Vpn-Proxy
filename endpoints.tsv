@@ -1,69 +1,53 @@
 id	host	ip	porta	proto	status	obs
-australia-stream	-	-	-	udp	nao-testado	-
-australia1	auau.jumptoserver.com	46.102.153.133	4443	udp	ok	curl 200
-austria-stream	at-stream.jumptoserver.com	185.126.236.73	4443	udp	falha	curl 500
-austria1	at-01.jumptoserver.com	185.126.236.73	4443	udp	falha	curl 500
-belgium-stream	bel-stream.jumptoserver.com	193.9.114.210	4443	udp	falha	curl timeout
-belgium1	-	-	-	udp	nao-testado	-
-brazil	-	-	-	udp	nao-testado	-
-bulgaria	-	-	-	udp	nao-testado	-
-canada-stream	-	-	-	udp	nao-testado	-
-canada1	-	-	-	udp	nao-testado	-
+australia	auau.jumptoserver.com	46.102.153.133	4443	udp	ok	curl 200
+austria	at-01.jumptoserver.com	185.126.236.73	4443	udp	nao-testado	-
+belgium1	bel-01.jumptoserver.com	193.9.114.210	4443	udp	nao-testado	-
+brazil1	br-03.jumptoserver.com	185.192.124.77	4443	udp	nao-testado	-
+brazil2	br-04.jumptoserver.com	185.192.124.75	4443	udp	nao-testado	-
+bulgaria	bg-01.jumptoserver.com	217.138.221.130	4443	udp	nao-testado	-
+canada-stream	ca-stream.jumptoserver.com	5.181.233.123	4443	udp	nao-testado	-
+canada1	ca-01.jumptoserver.com	5.181.233.122	4443	udp	nao-testado	-
 colombia	clmb.jumptoserver.com	146.70.136.11	4443	udp	ok	curl 302
 czechia	cz-01.jumptoserver.com	45.84.122.154	4443	udp	ok	curl 302
 denmark	dk-01.jumptoserver.com	146.70.92.82	4443	udp	ok	curl 302
-finland1	fi.jumptoserver.com	37.143.129.152	4443	udp	ok	curl 302
-finland2	fi2.jumptoserver.com	37.143.129.237	4443	udp	ok	curl 302
-france	fr.jumptoserver.com	146.70.40.99	4443	udp	ok	curl 302
+finland	fi.jumptoserver.com	37.143.129.152	4443	udp	ok	curl 302
 france-via-uk	uk-dbl.jumptoserver.com	195.191.219.69	4443	udp	ok	curl 302
+france1	fr.jumptoserver.com	146.70.40.99	4443	udp	ok	curl 302
+france2	fr2.jumptoserver.com	146.70.40.98	4443	udp	nao-testado	-
 germany-dus1	de-dus1.jumptoserver.com	213.202.223.32	4443	udp	ambiguo	curl 302 porem unhealthy
 germany-dus2	de-dus2.jumptoserver.com	89.163.157.125	4443	udp	falha	curl timeout
-germany-frankfurt	-	-	-	udp	nao-testado	-
-greece	-	-	-	udp	nao-testado	-
-hongkong	-	-	-	udp	nao-testado	-
-hungary	-	-	-	udp	nao-testado	-
-india-stream	-	-	-	udp	nao-testado	-
-india1	-	-	-	udp	nao-testado	-
-ireland-stream	-	-	-	udp	nao-testado	-
-ireland1	-	-	-	udp	nao-testado	-
-italy-stream	-	-	-	udp	nao-testado	-
-italy1	-	-	-	udp	nao-testado	-
-japan-stream	-	-	-	udp	nao-testado	-
-japan1	-	-	-	udp	nao-testado	-
-luxembourg	-	-	-	udp	nao-testado	-
-malaysia	-	-	-	udp	nao-testado	-
-mexico	-	-	-	udp	nao-testado	-
-netherlands1	-	-	-	udp	nao-testado	-
-netherlands2	-	-	-	udp	nao-testado	-
-norway	-	-	-	udp	nao-testado	-
-poland	-	-	-	udp	nao-testado	-
-portugal	-	-	-	udp	nao-testado	-
-romania	-	-	-	udp	nao-testado	-
-russia	-	-	-	udp	nao-testado	-
-serbia	-	-	-	udp	nao-testado	-
-singapore	-	-	-	udp	nao-testado	-
-slovakia	-	-	-	udp	nao-testado	-
-southafrica	-	-	-	udp	nao-testado	-
-southkorea-stream	-	-	-	udp	nao-testado	-
-southkorea1	-	-	-	udp	nao-testado	-
-spain	-	-	-	udp	nao-testado	-
-sweden	-	-	-	udp	nao-testado	-
-switzerland	-	-	-	udp	nao-testado	-
-turkey	-	-	-	udp	nao-testado	-
-uae-dubai	-	-	-	udp	nao-testado	-
-uk-stream	-	-	-	udp	nao-testado	-
-uk1	-	-	-	udp	nao-testado	-
-uk2	-	-	-	udp	nao-testado	-
-ukraine	-	-	-	udp	nao-testado	-
-usa-ashburn	-	-	-	udp	nao-testado	-
-usa-atlanta	-	-	-	udp	nao-testado	-
-usa-chicago	-	-	-	udp	nao-testado	-
-usa-dallas	-	-	-	udp	nao-testado	-
-usa-losangeles	-	-	-	udp	nao-testado	-
-usa-miami	-	-	-	udp	nao-testado	-
-usa-newyork	-	-	-	udp	nao-testado	-
-usa-seattle	-	-	-	udp	nao-testado	-
-usa-stream1	-	-	-	udp	nao-testado	-
-usa-stream2	-	-	-	udp	nao-testado	-
-usa-via-netherlands	-	-	-	udp	nao-testado	-
-usa-washington	-	-	-	udp	nao-testado	-
+germany-frankfurt	de-01.jumptoserver.com	146.70.139.154	4443	udp	nao-testado	-
+greece	grc.jumptoserver.com	45.92.33.82	4443	udp	nao-testado	-
+hongkong	hk.jumptoserver.com	27.0.232.63	4443	udp	nao-testado	-
+hungary	hng.jumptoserver.com	37.120.144.165	4443	udp	nao-testado	-
+india	in-vr.jumptoserver.com	45.84.241.245	4443	udp	nao-testado	-
+ireland	ir.jumptoserver.com	146.70.130.218	4443	udp	nao-testado	-
+italy	it-01.jumptoserver.com	176.126.83.71	4443	udp	nao-testado	-
+japan	jp-op.jumptoserver.com	93.118.41.92	4443	udp	nao-testado	-
+luxembourg	lux1.jumptoserver.com	5.253.204.43	4443	udp	nao-testado	-
+malaysia	my2.jumptoserver.com	103.75.116.141	4443	udp	nao-testado	-
+mexico	mx3.jumptoserver.com	147.78.1.87	4443	udp	nao-testado	-
+norway	nr-01.jumptoserver.com	91.219.215.34	4443	udp	nao-testado	-
+poland	pl.jumptoserver.com	92.118.205.141	4443	udp	nao-testado	-
+portugal	pt.jumptoserver.com	185.90.57.146	4443	udp	nao-testado	-
+romania	ro-01.jumptoserver.com	146.70.66.130	4443	udp	nao-testado	-
+russia	ru-vr.jumptoserver.com	91.226.58.5	4443	udp	nao-testado	-
+serbia	rs-01.jumptoserver.com	37.120.193.138	4443	udp	nao-testado	-
+southafrica	sa-jn.jumptoserver.com	129.232.176.170	4443	udp	nao-testado	-
+southkorea-stream	kr.jumptoserver.com	103.249.31.36	4443	udp	nao-testado	-
+southkorea1	kr.jumptoserver.com	103.249.31.36	4443	udp	nao-testado	-
+spain	es-01.jumptoserver.com	45.154.206.101	4443	udp	nao-testado	-
+sweden	se-01.jumptoserver.com	146.70.16.234	4443	udp	nao-testado	-
+switzerland	ch-01.jumptoserver.com	37.120.213.10	4443	udp	nao-testado	-
+switzerland-via-usa	us-dvpn.jumptoserver.com	88.216.97.4	4443	udp	nao-testado	-
+turkey	tr.jumptoserver.com	185.123.101.43	4443	udp	nao-testado	-
+uk-stream	uk-streaming.jumptoserver.com	195.191.219.70	4443	udp	nao-testado	-
+uk1	uk-01.jumptoserver.com	195.191.219.67	4443	udp	nao-testado	-
+uk2	uk-02.jumptoserver.com	195.191.219.68	4443	udp	nao-testado	-
+usa-ashburn	us-ash.jumptoserver.com	140.174.186.98	4443	udp	nao-testado	-
+usa-chicago	us-ch.jumptoserver.com	88.216.97.2	4443	udp	nao-testado	-
+usa-miami	us-mia.jumptoserver.com	37.120.157.250	4443	udp	nao-testado	-
+usa-newyork	us-ny1.jumptoserver.com	23.95.75.25	4443	udp	nao-testado	-
+usa-seattle	us-se.jumptoserver.com	107.175.82.198	4443	udp	nao-testado	-
+usa-stream	us-ash-stream.jumptoserver.com	140.174.186.99	4443	udp	nao-testado	-
+usa-washington	us-wt1.jumptoserver.com	162.210.193.144	4443	udp	nao-testado	-
