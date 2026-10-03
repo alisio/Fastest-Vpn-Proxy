@@ -2,6 +2,24 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TSV="${TSV:-$SCRIPT_DIR/endpoints.tsv}"
+ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/.env}"
+
+_load_env_vpn_endpoint() {  # VPN_ENDPOINT da env tem prioridade; senão lê do ENV_FILE
+  if [ -n "${VPN_ENDPOINT:-}" ] || [ ! -f "$ENV_FILE" ]; then
+    return 0
+  fi
+  local linha
+  while IFS= read -r linha || [ -n "$linha" ]; do
+    linha="${linha%$'\r'}"
+    case "$linha" in
+      VPN_ENDPOINT=?*)
+        VPN_ENDPOINT="${linha#VPN_ENDPOINT=}"
+        return 0
+        ;;
+    esac
+  done < "$ENV_FILE"
+}
+_load_env_vpn_endpoint
 
 endpoint_exists() {
   awk -F'\t' -v id="$1" 'NR>1 && $1==id {found=1} END {exit !found}' "$TSV"
@@ -332,7 +350,13 @@ cmd_update() {
 main() {
   case "${1:-}" in
     -h|--help) uso ;;
-    "") menu_interativo ;;
+    "")
+      if [ -n "${VPN_ENDPOINT:-}" ]; then
+        cmd_switch "$VPN_ENDPOINT"
+      else
+        menu_interativo
+      fi
+      ;;
     -*) uso >&2; return 1 ;;
     update) cmd_update ;;
     status) cmd_status ;;

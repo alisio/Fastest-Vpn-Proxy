@@ -341,6 +341,44 @@ setup_conf() {
   [[ "$output" == *"DOCKER_CHAMADO"* ]]
 }
 
+@test "main sem argumento usa VPN_ENDPOINT do ambiente e troca endpoint sem menu" {
+  run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' ENV_FILE=/nonexistent VPN_ENDPOINT=france OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn' CONF_DEST='$BATS_TEST_TMPDIR' \
+    DOCKER_CMD='echo DOCKER_CHAMADO' HEALTH_CMD='echo healthy' CURL_CMD='echo 200' \
+    '$VPN' </dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: france"* ]]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+  [[ "$output" != *"entrada inválida"* ]]
+}
+
+@test "main sem argumento usa VPN_ENDPOINT do ENV_FILE e troca endpoint sem menu" {
+  ENVF="$BATS_TEST_TMPDIR/env-com-endpoint"
+  printf 'OPENVPN_USER=x\nOPENVPN_PASSWORD=y\nVPN_ENDPOINT=france\n' > "$ENVF"
+  run bash -c "unset VPN_ENDPOINT; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' ENV_FILE='$ENVF' OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn' CONF_DEST='$BATS_TEST_TMPDIR' \
+    DOCKER_CMD='echo DOCKER_CHAMADO' HEALTH_CMD='echo healthy' CURL_CMD='echo 200' \
+    '$VPN' </dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: france"* ]]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+  [[ "$output" != *"entrada inválida"* ]]
+}
+
+@test "main sem argumento e sem VPN_ENDPOINT mostra o menu e falha no EOF" {
+  run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' ENV_FILE=/nonexistent timeout 5 '$VPN' </dev/null"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"entrada inválida"* ]]
+  [[ "$output" != *"endpoint ativo"* ]]
+}
+
+@test "main sem argumento com ENV_FILE sem VPN_ENDPOINT mostra o menu" {
+  ENVF="$BATS_TEST_TMPDIR/env-sem-endpoint"
+  printf 'OPENVPN_USER=x\nOPENVPN_PASSWORD=y\n' > "$ENVF"
+  run bash -c "unset VPN_ENDPOINT; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' ENV_FILE='$ENVF' timeout 5 '$VPN' </dev/null"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"entrada inválida"* ]]
+  [[ "$output" != *"endpoint ativo"* ]]
+}
+
 @test "merge_tsv preserva status de host inalterado" {
   run bash -c "source '$VPN'; RESOLVE_CMD='echo 1.2.3.4'; merge_tsv '$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' '$BATS_TEST_DIRNAME/fixtures/ovpn_novo'"
   [ "$status" -eq 0 ]
