@@ -16,7 +16,7 @@ setup() {
 }
 
 @test "vpn.sh com argumento desconhecido exibe uso e sai com 1" {
-  run "$VPN" argumento-inexistente
+  run "$VPN" --inexistente
   [ "$status" -eq 1 ]
   [[ "$output" == *"Uso:"* ]]
 }
@@ -151,6 +151,81 @@ setup_conf() {
   [ "$(grep -c docker "$LOG")" -eq 2 ]
 }
 
+@test "troca para endpoint com status falha exige confirmação" {
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch germany-dus1 <<<''"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"prosseguir"* ]]
+  [[ "$output" == *"cancelada"* ]]
+  [[ "$output" != *"DOCKER_CHAMADO"* ]]
+  [ ! -e "$OUT/custom.conf" ]
+  [ ! -e "$OUT/custom-ru.conf" ]
+}
+
+@test "guarda também exige confirmação para status falha na tsv" {
+  OUT="$BATS_TEST_TMPDIR"
+  TSV_F="$OUT/endpoints-falha.tsv"
+  awk -F'\t' -v OFS='\t' '$1=="france" {$6="falha"} 1' \
+    "$BATS_TEST_DIRNAME/fixtures/endpoints.tsv" > "$TSV_F"
+  run bash -c "source '$VPN'; TSV='$TSV_F'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch france <<<''"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cancelada"* ]]
+  [[ "$output" != *"DOCKER_CHAMADO"* ]]
+  [ ! -e "$OUT/custom.conf" ]
+}
+
+@test "confirmação s prossegue com troca de endpoint ambiguo" {
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch germany-dus1 <<< 's'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+  [[ "$output" == *"endpoint ativo: germany-dus1"* ]]
+}
+
+@test "--force pula confirmação de endpoint ambiguo" {
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch germany-dus1 --force </dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: germany-dus1"* ]]
+  [[ "$output" != *"prosseguir"* ]]
+}
+
+@test "cmd_status mostra id ativo lido do custom-ru.conf" {
+  load_fixture_tsv
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$TSV'; CUSTOM_RU='$OUT/custom-ru.conf'; HEALTH_CMD='echo healthy'; \
+    generate_confs australia '$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn' '$OUT' && cmd_status"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+  [[ "$output" == *"status: ok"* ]]
+  [[ "$output" == *"health: healthy"* ]]
+}
+
+@test "cmd_status falha quando remote não corresponde a nenhum endpoint" {
+  load_fixture_tsv
+  OUT="$BATS_TEST_TMPDIR"
+  printf 'client\nremote 9.9.9.9 4443\nproto udp\n' > "$OUT/custom-ru.conf"
+  run bash -c "source '$VPN'; TSV='$TSV'; CUSTOM_RU='$OUT/custom-ru.conf'; HEALTH_CMD='echo healthy'; cmd_status"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"não encontrado"* ]]
+  [[ "$output" == *"9.9.9.9"* ]]
+}
+
+@test "cmd_status falha quando custom-ru.conf não existe" {
+  load_fixture_tsv
+  run bash -c "source '$VPN'; TSV='$TSV'; CUSTOM_RU='$BATS_TEST_TMPDIR/nao-existe.conf'; HEALTH_CMD='echo healthy'; cmd_status"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"não encontrada"* ]]
+}
+
 @test "render_menu lista ids numerados com status" {
   run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; render_menu"
   [ "$status" -eq 0 ]
@@ -172,6 +247,35 @@ setup_conf() {
   run bash -c "TSV=/nonexistent/x.tsv '$VPN' </dev/null"
   [ "$status" -eq 1 ]
   [[ "$output" == *"não foi possível ler"* ]]
+}
+
+@test "main despacha update para cmd_update" {
+  TSV_UP="$BATS_TEST_TMPDIR/endpoints.tsv"
+  cp "$BATS_TEST_DIRNAME/fixtures/endpoints.tsv" "$TSV_UP"
+  run bash -c "TSV='$TSV_UP' DOWNLOAD_CMD='false' '$VPN' update"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"download"* ]]
+  [[ "$output" != *"Uso:"* ]]
+}
+
+@test "main despacha status para cmd_status" {
+  load_fixture_tsv
+  OUT="$BATS_TEST_TMPDIR"
+  printf 'client\nremote 46.102.153.133 4443\nproto udp\n' > "$OUT/custom-ru.conf"
+  run bash -c "TSV='$TSV' CUSTOM_RU='$OUT/custom-ru.conf' HEALTH_CMD='echo healthy' '$VPN' status"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+  [[ "$output" == *"health: healthy"* ]]
+  [[ "$output" != *"Uso:"* ]]
+}
+
+@test "main despacha id para cmd_switch" {
+  run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn' CONF_DEST='$BATS_TEST_TMPDIR' \
+    DOCKER_CMD='echo DOCKER_CHAMADO' HEALTH_CMD='echo healthy' CURL_CMD='echo 200' \
+    '$VPN' france"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: france"* ]]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
 }
 
 @test "menu_interativo caminho feliz: escolha numérica troca endpoint" {

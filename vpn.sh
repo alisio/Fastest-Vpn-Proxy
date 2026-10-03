@@ -18,9 +18,9 @@ endpoint_get() {  # $1=id $2=coluna(host|ip|porta|proto|status)
 
 uso() {
   cat <<'EOF'
-Uso: vpn.sh [update | <id> | status | --help]
+Uso: vpn.sh [update | <id> [--force] | status | --help]
   (sem argumento)  menu interativo
-  <id>             troca para o endpoint
+  <id> [--force]   troca para o endpoint; --force pula confirmação de status falha/ambiguo
   update           baixa configs do provedor e regenera endpoints.tsv
   status           mostra endpoint ativo e health
 EOF
@@ -115,10 +115,23 @@ _cleanup_backups() {  # $1=dir_destino
   rm -f "$1/custom.conf.bak" "$1/custom-ru.conf.bak"
 }
 
-cmd_switch() {  # $1=id
-  local id="$1"
-  local src dest
+cmd_switch() {  # $1=id $2=--force (opcional, pula confirmação de status falha/ambiguo)
+  local id="$1" forca="${2:-}"
+  local src dest status resp
   endpoint_exists "$id" || { echo "erro: endpoint '$id' não existe em $TSV" >&2; return 1; }
+  status="$(endpoint_get "$id" status)"
+  case "$status" in
+    falha|ambiguo)
+      if [ "$forca" != "--force" ]; then
+        printf "aviso: endpoint '%s' tem status '%s' — prosseguir? [s/N]\n" "$id" "$status" >&2
+        IFS= read -r resp || resp=""
+        case "$resp" in
+          s|S|sim|Sim|SIM) ;;
+          *) echo "erro: troca para '$id' cancelada (status '$status' sem confirmação)" >&2; return 1 ;;
+        esac
+      fi
+      ;;
+  esac
   src="${OVPN_SRC:-$SCRIPT_DIR/.ovpn-cache/${id}-udp.ovpn}"
   dest="${CONF_DEST:-$SCRIPT_DIR}"
   [ -f "$src" ] || { echo "erro: cache não encontrado: $src — rode ./vpn.sh update" >&2; return 1; }
@@ -139,6 +152,31 @@ cmd_switch() {  # $1=id
   fi
   _cleanup_backups "$dest"
   echo "endpoint ativo: $id"
+}
+
+cmd_status() {
+  local conf="${CUSTOM_RU:-$SCRIPT_DIR/custom-ru.conf}"
+  local host porta linha_tsv id situacao obs cmd health
+  [ -f "$conf" ] || { echo "erro: configuração não encontrada: $conf" >&2; return 1; }
+  host="$(tr -d '\r' < "$conf" | awk '$1=="remote" {print $2; exit}')"
+  porta="$(tr -d '\r' < "$conf" | awk '$1=="remote" {print $3; exit}')"
+  if [ -z "$host" ] || [ -z "$porta" ]; then
+    echo "erro: linha remote ausente em $conf" >&2
+    return 1
+  fi
+  linha_tsv="$(awk -F'\t' -v h="$host" -v p="$porta" \
+    'NR>1 && ($2==h || $3==h) && $4==p {print $1 "\t" $6 "\t" $7; exit}' "$TSV")"
+  if [ -z "$linha_tsv" ]; then
+    echo "erro: endpoint ativo não encontrado em $TSV (remote $host $porta)" >&2
+    return 1
+  fi
+  IFS=$'\t' read -r id situacao obs <<< "$linha_tsv"
+  echo "endpoint ativo: $id"
+  echo "status: $situacao ($obs)"
+  echo "remote: $host $porta"
+  cmd="${HEALTH_CMD:-$DEFAULT_HEALTH_CMD}"
+  health="$(eval "$cmd" 2>/dev/null)" || health=""
+  echo "health: ${health:-indisponível}"
 }
 
 render_menu() {  # imprime menu numerado (id + status), pulando o cabeçalho
@@ -292,7 +330,10 @@ main() {
   case "${1:-}" in
     -h|--help) uso ;;
     "") menu_interativo ;;
-    *) uso >&2; return 1 ;;
+    -*) uso >&2; return 1 ;;
+    update) cmd_update ;;
+    status) cmd_status ;;
+    *) cmd_switch "$@" ;;
   esac
 }
 
