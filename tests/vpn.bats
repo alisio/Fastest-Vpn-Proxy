@@ -220,6 +220,32 @@ setup_provider_zip() {
   grep -q $'^noruega\t' "$TSV_UP"
   run grep -q "germany-dus1" "$TSV_UP"
   [ "$status" -ne 0 ]
+  # cobre população do cache: invariante id → ${id}-udp.ovpn (nomenclatura lida pelo cmd_switch)
+  CACHE="$BATS_TEST_TMPDIR/cache"
+  while IFS=$'\t' read -r id _; do
+    if [ "$id" != "id" ]; then
+      [ -f "$CACHE/${id}-udp.ovpn" ]
+    fi
+  done < "$TSV_UP"
+  [ ! -e "$CACHE/germany-dus1-udp.ovpn" ]
+}
+
+@test "cmd_update na primeira execução gera a tsv e não mente sobre preservação" {
+  setup_provider_zip
+  TSV_UP="$BATS_TEST_TMPDIR/endpoints.tsv"   # inexistente: clone novo
+  run bash -c "source '$VPN'; TSV='$TSV_UP'; OVPN_CACHE_DIR='$BATS_TEST_TMPDIR/cache'; DOWNLOAD_CMD='false'; cmd_update"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"download"* ]]
+  [[ "$output" != *"preservada"* ]]
+  run bash -c "source '$VPN'; TSV='$TSV_UP'; OVPN_CACHE_DIR='$BATS_TEST_TMPDIR/cache'; RESOLVE_CMD='echo 1.2.3.4'; DOWNLOAD_CMD=\"cp '$ZIP_FIX'\"; cmd_update"
+  [ "$status" -eq 0 ]
+  [ -f "$TSV_UP" ]
+  [[ "$(head -n 1 "$TSV_UP")" == $'id\thost\tip\tporta\tproto\tstatus\tobs' ]]
+  grep -q $'^australia\t' "$TSV_UP"
+  grep -q $'^france\t' "$TSV_UP"
+  grep -q $'^noruega\t' "$TSV_UP"
+  run awk -F'\t' 'NR>1 && $6!="nao-testado" {exit 1}' "$TSV_UP"
+  [ "$status" -eq 0 ]
 }
 
 @test "cmd_update com download falho preserva a tsv antiga" {

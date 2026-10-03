@@ -190,12 +190,15 @@ resolve_ip() {  # $1=host → primeiro IP (vazio se resolução falhar)
   printf '%s\n' "$out"
 }
 
-merge_tsv() {  # $1=tsv_velho $2=dir_ovpn → nova tabela no stdout (preserva status)
+merge_tsv() {  # $1=tsv_velho $2=dir_ovpn → nova tabela no stdout (sem tsv antigo, gera tudo como nao-testado)
   local tsv="$1" dir="$2"
   local arq id core host porta proto ip status obs antigo
-  [ -f "$tsv" ] || { echo "erro: tsv não encontrado: $tsv" >&2; return 1; }
   [ -d "$dir" ] || { echo "erro: diretório de .ovpn não encontrado: $dir" >&2; return 1; }
-  head -n 1 "$tsv"
+  if [ -f "$tsv" ]; then
+    head -n 1 "$tsv"
+  else
+    printf 'id\thost\tip\tporta\tproto\tstatus\tobs\n'
+  fi
   for arq in "$dir"/*.ovpn; do
     [ -e "$arq" ] || { echo "erro: nenhum arquivo .ovpn em $dir" >&2; return 1; }
     id="${arq##*/}"
@@ -204,11 +207,15 @@ merge_tsv() {  # $1=tsv_velho $2=dir_ovpn → nova tabela no stdout (preserva st
     core="$(parse_ovpn_core "$arq")" || return 1
     IFS=$'\t' read -r host porta proto <<< "$core"
     ip="$(resolve_ip "$host")"
-    antigo="$(awk -F'\t' -v id="$id" -v h="$host" -v p="$porta" '
-      NR > 1 && $1 == id {
-        if ($2 == h && $4 == p) { print $6; print $7 } else { print "nao-testado"; print "-" }
-        exit
-      }' "$tsv")"
+    if [ -f "$tsv" ]; then
+      antigo="$(awk -F'\t' -v id="$id" -v h="$host" -v p="$porta" '
+        NR > 1 && $1 == id {
+          if ($2 == h && $4 == p) { print $6; print $7 } else { print "nao-testado"; print "-" }
+          exit
+        }' "$tsv")"
+    else
+      antigo=""
+    fi
     if [ -n "$antigo" ]; then
       status="${antigo%%$'\n'*}"
       obs="${antigo#*$'\n'}"
@@ -231,17 +238,22 @@ download_provider_zip() {  # $1=destino.zip
 
 cmd_update() {
   local tmpdir zip extracao dir_ovpn tsv_tmp cache
-  local n_total n_ok n_nao
+  local n_total n_ok n_nao situacao_tsv
   tmpdir="$(mktemp -d)" || { echo "erro: não foi possível criar diretório temporário" >&2; return 1; }
   zip="$tmpdir/provider.zip"
   extracao="$tmpdir/extracao"
+  if [ -f "$TSV" ]; then
+    situacao_tsv="tabela $TSV preservada"
+  else
+    situacao_tsv="tabela $TSV inexistente"
+  fi
   if ! download_provider_zip "$zip"; then
-    echo "erro: download do provedor falhou — tabela $TSV preservada" >&2
+    echo "erro: download do provedor falhou — $situacao_tsv" >&2
     rm -rf "$tmpdir"
     return 1
   fi
   if ! unzip -q "$zip" -d "$extracao" 2>/dev/null; then
-    echo "erro: extração do zip falhou — tabela $TSV preservada" >&2
+    echo "erro: extração do zip falhou — $situacao_tsv" >&2
     rm -rf "$tmpdir"
     return 1
   fi
@@ -251,7 +263,7 @@ cmd_update() {
   fi
   tsv_tmp="$TSV.tmp"
   if ! merge_tsv "$TSV" "$dir_ovpn" > "$tsv_tmp"; then
-    echo "erro: merge dos endpoints falhou — tabela $TSV preservada" >&2
+    echo "erro: merge dos endpoints falhou — $situacao_tsv" >&2
     rm -f "$tsv_tmp"
     rm -rf "$tmpdir"
     return 1
