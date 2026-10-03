@@ -164,8 +164,11 @@ cmd_status() {
     echo "erro: linha remote ausente em $conf" >&2
     return 1
   fi
-  linha_tsv="$(awk -F'\t' -v h="$host" -v p="$porta" \
-    'NR>1 && ($2==h || $3==h) && $4==p {print $1 "\t" $6 "\t" $7; exit}' "$TSV")"
+  if ! linha_tsv="$(awk -F'\t' -v h="$host" -v p="$porta" \
+    'NR>1 && ($2==h || $3==h) && $4==p {print $1 "\t" $6 "\t" $7; exit}' "$TSV" 2>/dev/null)"; then
+    echo "erro: não foi possível ler $TSV — rode ./vpn.sh update" >&2
+    return 1
+  fi
   if [ -z "$linha_tsv" ]; then
     echo "erro: endpoint ativo não encontrado em $TSV (remote $host $porta)" >&2
     return 1

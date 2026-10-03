@@ -198,6 +198,20 @@ setup_conf() {
   [[ "$output" != *"prosseguir"* ]]
 }
 
+@test "guarda de endpoint escreve prompt e cancelamento apenas em stderr" {
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch germany-dus1 1>'$OUT/out' 2>'$OUT/err' <<<''"
+  [ "$status" -ne 0 ]
+  [ ! -s "$OUT/out" ]
+  grep -q "prosseguir" "$OUT/err"
+  grep -q "cancelada" "$OUT/err"
+  [ ! -e "$OUT/custom.conf" ]
+  run grep -q "DOCKER_CHAMADO" "$OUT/err" "$OUT/out"
+  [ "$status" -ne 0 ]
+}
+
 @test "cmd_status mostra id ativo lido do custom-ru.conf" {
   load_fixture_tsv
   OUT="$BATS_TEST_TMPDIR"
@@ -224,6 +238,46 @@ setup_conf() {
   run bash -c "source '$VPN'; TSV='$TSV'; CUSTOM_RU='$BATS_TEST_TMPDIR/nao-existe.conf'; HEALTH_CMD='echo healthy'; cmd_status"
   [ "$status" -ne 0 ]
   [[ "$output" == *"não encontrada"* ]]
+}
+
+@test "status real-mode com tsv inexistente sai com 1 e erro amigável sem vazar awk" {
+  OUT="$BATS_TEST_TMPDIR"
+  printf 'client\nremote 46.102.153.133 4443\nproto udp\n' > "$OUT/custom-ru.conf"
+  run bash -c "TSV='$OUT/endpoints.tsv' CUSTOM_RU='$OUT/custom-ru.conf' HEALTH_CMD='echo healthy' '$VPN' status 1>'$OUT/out' 2>'$OUT/err'"
+  [ "$status" -eq 1 ]
+  grep -q "não foi possível ler" "$OUT/err"
+  [ ! -s "$OUT/out" ]
+  run grep -q "awk" "$OUT/err"
+  [ "$status" -ne 0 ]
+}
+
+@test "cmd_status com tsv inexistente falha com 1 e não vaza o erro bruto do awk" {
+  OUT="$BATS_TEST_TMPDIR"
+  printf 'client\nremote 46.102.153.133 4443\nproto udp\n' > "$OUT/custom-ru.conf"
+  run bash -c "source '$VPN'; TSV='$OUT/endpoints.tsv'; CUSTOM_RU='$OUT/custom-ru.conf'; HEALTH_CMD='echo healthy'; cmd_status 1>'$OUT/out' 2>'$OUT/err'"
+  [ "$status" -eq 1 ]
+  grep -q "não foi possível ler" "$OUT/err"
+  [ ! -s "$OUT/out" ]
+  run grep -q "awk" "$OUT/err"
+  [ "$status" -ne 0 ]
+}
+
+@test "cmd_status casa o endpoint pelo hostname do remote" {
+  load_fixture_tsv
+  OUT="$BATS_TEST_TMPDIR"
+  printf 'client\nremote auau.jumptoserver.com 4443\nproto udp\n' > "$OUT/custom-ru.conf"
+  run bash -c "source '$VPN'; TSV='$TSV'; CUSTOM_RU='$OUT/custom-ru.conf'; HEALTH_CMD='echo healthy'; cmd_status"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+}
+
+@test "cmd_status não casa endpoint com porta divergente" {
+  load_fixture_tsv
+  OUT="$BATS_TEST_TMPDIR"
+  printf 'client\nremote 46.102.153.133 9999\nproto udp\n' > "$OUT/custom-ru.conf"
+  run bash -c "source '$VPN'; TSV='$TSV'; CUSTOM_RU='$OUT/custom-ru.conf'; HEALTH_CMD='echo healthy'; cmd_status"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"não encontrado"* ]]
 }
 
 @test "render_menu lista ids numerados com status" {
