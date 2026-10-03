@@ -23,3 +23,8 @@ services:
       - FIREWALL_INPUT_PORTS=8888
       - UPDATER_PERIOD=24h
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
