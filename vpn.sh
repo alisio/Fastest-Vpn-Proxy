@@ -71,7 +71,7 @@ default_endpoint() {
 }
 
 DEFAULT_DOCKER_CMD="docker compose up -d --force-recreate --no-deps"
-DEFAULT_HEALTH_CMD="docker inspect --format '{{.State.Health.Status}}' opencode-fastest-proxy"
+DEFAULT_HEALTH_CMD="docker inspect --format '{{.State.Health.Status}}' fastest-vpn-proxy"
 DEFAULT_CURL_CMD="curl -x 127.0.0.1:8888 --max-time 12 -o /dev/null -w '%{http_code}' https://ifconfig.me"
 
 run_docker_up() {
