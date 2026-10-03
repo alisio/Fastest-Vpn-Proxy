@@ -363,6 +363,18 @@ setup_conf() {
   [[ "$output" != *"entrada inválida"* ]]
 }
 
+@test "main sem argumento prioriza VPN_ENDPOINT do ambiente sobre o ENV_FILE" {
+  ENVF="$BATS_TEST_TMPDIR/env-com-endpoint-diferente"
+  printf 'OPENVPN_USER=x\nOPENVPN_PASSWORD=y\nVPN_ENDPOINT=germany-dus1\n' > "$ENVF"
+  run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' ENV_FILE='$ENVF' VPN_ENDPOINT=australia OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn' CONF_DEST='$BATS_TEST_TMPDIR' \
+    DOCKER_CMD='echo DOCKER_CHAMADO' HEALTH_CMD='echo healthy' CURL_CMD='echo 200' \
+    '$VPN' </dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+  [[ "$output" != *"germany-dus1"* ]]
+  [[ "$output" != *"entrada inválida"* ]]
+}
+
 @test "main sem argumento e sem VPN_ENDPOINT mostra o menu e falha no EOF" {
   run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' ENV_FILE=/nonexistent timeout 5 '$VPN' </dev/null"
   [ "$status" -eq 1 ]
