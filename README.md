@@ -16,7 +16,7 @@ A ferramenta também verifica se a conexão está funcionando a cada troca e atu
 - `docker-compose.yml`: `gluetun` (`qmcgaw/gluetun:latest`), `container_name: fastest-vpn-proxy`, `VPN_TYPE=openvpn`, `HTTPPROXY=on`, porta `127.0.0.1:8888` (`docker-compose.yml:10,20`).
 - `custom.conf`: snapshot da conf OpenVPN ativa (`remote auau.jumptoserver.com 4443`, `proto udp` — `custom.conf:2-3`).
 - `custom-ru.conf`: mesmo conteúdo, `remote` com IP literal (`46.102.153.133`, resolvido de `auau.jumptoserver.com` — `custom-ru.conf:2`).
-- `.env`: `OPENVPN_USER` / `OPENVPN_PASSWORD` / `VPN_ENDPOINT`. Não versionado; credenciais FastestVPN preenchidas manualmente.
+- `.env`: `OPENVPN_USER` / `OPENVPN_PASSWORD` / `VPN_ENDPOINT` / `HTTPPROXY_LOG` (`off` por omissão; `on` loga cada request em `docker logs`). Não versionado; credenciais FastestVPN preenchidas manualmente.
 - `tests/vpn.bats` + `tests/fixtures/`: testes automatizados do `vpn.sh` (bats).
 
 ## Pré-requisitos
