@@ -36,9 +36,10 @@ endpoint_get() {  # $1=id $2=coluna(host|ip|porta|proto|status)
 
 uso() {
   cat <<'EOF'
-Uso: vpn.sh [update | <id> [--force] | status | --help]
+Uso: vpn.sh [init [--force] | update | <id> [--force] | status | --help]
   (sem argumento)  troca para VPN_ENDPOINT se definido (env ou .env); senão menu interativo
   <id> [--force]   troca para o endpoint; --force pula confirmação de status falha/ambiguo
+  init [--force]  primeira subida: checa pré-reqs e .env, roda update e sobe o container
   update           baixa configs do provedor e regenera endpoints.tsv
   status           mostra endpoint ativo e health
 EOF
@@ -172,16 +173,22 @@ cmd_switch() {  # $1=id $2=--force (opcional, pula confirmação de status falha
   echo "endpoint ativo: $id"
 }
 
-cmd_status() {
-  local conf="${CUSTOM_RU:-$SCRIPT_DIR/custom-ru.conf}"
-  local host porta linha_tsv id situacao obs cmd health
-  [ -f "$conf" ] || { echo "erro: configuração não encontrada: $conf" >&2; return 1; }
+_conf_remote() {  # $1=arquivo.conf → stdout: "host porta" (rc 1 se ausente)
+  local conf="$1" host porta
+  [ -f "$conf" ] || return 1
   host="$(tr -d '\r' < "$conf" | awk '$1=="remote" {print $2; exit}')"
   porta="$(tr -d '\r' < "$conf" | awk '$1=="remote" {print $3; exit}')"
-  if [ -z "$host" ] || [ -z "$porta" ]; then
-    echo "erro: linha remote ausente em $conf" >&2
-    return 1
-  fi
+  [ -n "$host" ] && [ -n "$porta" ] || return 1
+  printf '%s %s\n' "$host" "$porta"
+}
+
+cmd_status() {
+  local conf="${CUSTOM_RU:-$SCRIPT_DIR/custom-ru.conf}"
+  local remote host porta linha_tsv id situacao obs cmd health
+  [ -f "$conf" ] || { echo "erro: configuração não encontrada: $conf" >&2; return 1; }
+  remote="$(_conf_remote "$conf")" \
+    || { echo "erro: linha remote ausente em $conf" >&2; return 1; }
+  read -r host porta <<< "$remote"
   if ! linha_tsv="$(awk -F'\t' -v h="$host" -v p="$porta" \
     'NR>1 && ($2==h || $3==h) && $4==p {print $1 "\t" $6 "\t" $7; exit}' "$TSV" 2>/dev/null)"; then
     echo "erro: não foi possível ler $TSV — rode ./vpn.sh update" >&2
@@ -347,6 +354,78 @@ cmd_update() {
   rm -rf "$tmpdir"
 }
 
+check_bin() {  # $1=rótulo $2=comando de verificação
+  local rotulo="$1" verif="$2"
+  if ! eval "$verif" >/dev/null 2>&1; then
+    echo "erro: pré-requisito ausente: $rotulo" >&2
+    return 1
+  fi
+}
+
+check_prereqs() {
+  local ret=0
+  check_bin docker "command -v docker" || ret=1
+  check_bin "docker compose" "docker compose version" || ret=1
+  check_bin curl "command -v curl" || ret=1
+  check_bin unzip "command -v unzip" || ret=1
+  check_bin dig "command -v dig" || ret=1
+  return "$ret"
+}
+
+_env_val() {  # $1=VAR → 0 se presente e não vazia em $ENV_FILE (o valor nunca é impresso)
+  local var="$1" linha val=""
+  [ -f "$ENV_FILE" ] || return 1
+  while IFS= read -r linha || [ -n "$linha" ]; do
+    linha="${linha%$'\r'}"
+    case "$linha" in
+      "$var"=?*) val="${linha#"$var"=}" ;;
+    esac
+  done < "$ENV_FILE"
+  [ -n "$val" ]
+}
+
+_init_ready() {  # $1=id → 0 se as confs casam com o id e o container está healthy
+  local id="$1" dest remote host porta linha saude
+  dest="${CONF_DEST:-$SCRIPT_DIR}"
+  remote="$(_conf_remote "$dest/custom-ru.conf")" || return 1
+  read -r host porta <<< "$remote"
+  linha="$(awk -F'\t' -v h="$host" -v p="$porta" \
+    'NR>1 && ($2==h || $3==h) && $4==p {print $1; exit}' "$TSV" 2>/dev/null)"
+  [ "$linha" = "$id" ] || return 1
+  saude="$(eval "${HEALTH_CMD:-$DEFAULT_HEALTH_CMD}" 2>/dev/null)" || saude=""
+  [ "$saude" = "healthy" ]
+}
+
+cmd_init() {  # [--force]
+  local forca="${1:-}" id cache
+  check_prereqs || return 1
+  if [ ! -f "$ENV_FILE" ]; then
+    echo "erro: $ENV_FILE não encontrado — rode: cp .env.example .env" >&2
+    return 1
+  fi
+  _env_val OPENVPN_USER \
+    || { echo "erro: OPENVPN_USER ausente ou vazio em $ENV_FILE" >&2; return 1; }
+  _env_val OPENVPN_PASSWORD \
+    || { echo "erro: OPENVPN_PASSWORD ausente ou vazio em $ENV_FILE" >&2; return 1; }
+  id="$(default_endpoint)"
+  if [ "$forca" != "--force" ] && [ -f "$TSV" ] \
+    && endpoint_exists "$id" && _init_ready "$id"; then
+    echo "já pronto: $id"
+    return 0
+  fi
+  if ! cmd_update; then
+    cache="${OVPN_CACHE_DIR:-$SCRIPT_DIR/.ovpn-cache}/${id}-udp.ovpn"
+    if [ -f "$cache" ]; then
+      echo "aviso: update falhou — prosseguindo com cache existente ($cache)" >&2
+    else
+      echo "erro: update falhou e não há cache para '$id' — verifique a rede e rode ./vpn.sh init de novo" >&2
+      return 1
+    fi
+  fi
+  endpoint_exists "$id" || { echo "erro: endpoint '$id' não existe em $TSV" >&2; return 1; }
+  cmd_switch "$id"
+}
+
 main() {
   case "${1:-}" in
     -h|--help) uso ;;
@@ -358,6 +437,7 @@ main() {
       fi
       ;;
     -*) uso >&2; return 1 ;;
+    init) cmd_init "${2:-}" ;;
     update) cmd_update ;;
     status) cmd_status ;;
     *) cmd_switch "$@" ;;

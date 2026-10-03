@@ -464,3 +464,103 @@ setup_provider_zip() {
   [[ "$output" == *"download"* ]]
   cmp -s "$TSV_UP" "$BATS_TEST_DIRNAME/fixtures/endpoints.tsv"
 }
+
+setup_init_env() {  # cria ENV_FILE com credenciais; ecoa o caminho
+  local envf="$BATS_TEST_TMPDIR/.env"
+  printf 'OPENVPN_USER=u\nOPENVPN_PASSWORD=p\n' > "$envf"
+  printf '%s\n' "$envf"
+}
+
+@test "cmd_init feliz faz update e sobe o container do zero" {
+  setup_provider_zip
+  ENVF="$(setup_init_env)"
+  OUT="$BATS_TEST_TMPDIR"
+  TSV_UP="$OUT/endpoints.tsv"   # inexistente: simula clone novo
+  run bash -c "source '$VPN'; unset VPN_ENDPOINT; TSV='$TSV_UP'; ENV_FILE='$ENVF'; OVPN_CACHE_DIR='$OUT/cache'; \
+    OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    RESOLVE_CMD='echo 1.2.3.4'; DOWNLOAD_CMD=\"cp '$ZIP_FIX'\"; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_init"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+  # ip vem do RESOLVE_CMD mockado ('echo 1.2.3.4'), não da fixture
+  grep -q "^remote 1.2.3.4 4443" "$OUT/custom-ru.conf"
+}
+
+@test "cmd_init sem .env falha citando o exemplo" {
+  load_fixture_tsv
+  run bash -c "source '$VPN'; TSV='$TSV'; ENV_FILE='/nonexistent/.env'; cmd_init"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cp .env.example .env"* ]]
+}
+
+@test "cmd_init com senha vazia falha sem expor valores" {
+  load_fixture_tsv
+  ENVF="$BATS_TEST_TMPDIR/.env"
+  printf 'OPENVPN_USER=usuario-teste\nOPENVPN_PASSWORD=\n' > "$ENVF"
+  run bash -c "source '$VPN'; TSV='$TSV'; ENV_FILE='$ENVF'; cmd_init"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"OPENVPN_PASSWORD"* ]]
+  [[ "$output" != *"usuario-teste"* ]]
+}
+
+@test "cmd_init com download falho prossegue com cache existente" {
+  load_fixture_tsv
+  ENVF="$(setup_init_env)"
+  OUT="$BATS_TEST_TMPDIR"
+  CACHE="$OUT/cache"
+  mkdir -p "$CACHE"
+  cp "$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn" "$CACHE/australia-udp.ovpn"
+  run bash -c "source '$VPN'; unset VPN_ENDPOINT; TSV='$TSV'; ENV_FILE='$ENVF'; OVPN_CACHE_DIR='$CACHE'; \
+    OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOWNLOAD_CMD='false'; DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_init"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"aviso"* ]]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+}
+
+@test "cmd_init com download falho e sem cache aborta" {
+  load_fixture_tsv
+  ENVF="$(setup_init_env)"
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; unset VPN_ENDPOINT; TSV='$TSV'; ENV_FILE='$ENVF'; OVPN_CACHE_DIR='$OUT/cache-ausente'; \
+    OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOWNLOAD_CMD='false'; DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_init"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"não há cache"* ]]
+  [[ "$output" != *"DOCKER_CHAMADO"* ]]
+}
+
+@test "cmd_init sem docker no PATH falha nomeando o binário" {
+  load_fixture_tsv
+  EMPTYBIN="$BATS_TEST_TMPDIR/emptybin"
+  mkdir -p "$EMPTYBIN"
+  run bash -c "source '$VPN'; TSV='$TSV'; PATH='$EMPTYBIN'; cmd_init"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pré-requisito ausente: docker"* ]]
+}
+
+@test "cmd_init idempotente não recria container já pronto (--force refaz)" {
+  setup_provider_zip
+  ENVF="$(setup_init_env)"
+  OUT="$BATS_TEST_TMPDIR"
+  TSV_UP="$OUT/endpoints.tsv"
+  BASE="source '$VPN'; unset VPN_ENDPOINT; TSV='$TSV_UP'; ENV_FILE='$ENVF'; OVPN_CACHE_DIR='$OUT/cache'; \
+    OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    RESOLVE_CMD='echo 1.2.3.4'; DOWNLOAD_CMD=\"cp '$ZIP_FIX'\"; \
+    HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'"
+  run bash -c "$BASE; DOCKER_CMD='echo DOCKER_CHAMADO'; cmd_init"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+  run bash -c "$BASE; DOCKER_CMD='echo DOCKER_CHAMADO'; cmd_init"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"já pronto: australia"* ]]
+  [[ "$output" != *"DOCKER_CHAMADO"* ]]
+  run bash -c "$BASE; DOCKER_CMD='echo DOCKER_CHAMADO'; cmd_init --force"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+}

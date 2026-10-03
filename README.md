@@ -29,6 +29,7 @@ A ferramenta também verifica se a conexão está funcionando a cada troca e atu
 cp .env.example .env
 # preencher .env com as credenciais FastestVPN
 
+./vpn.sh init         # primeira subida: checa pré-reqs e .env, atualiza endpoints e sobe o container (idempotente; --force refaz)
 ./vpn.sh update        # baixa as configs do provedor e regenera endpoints.tsv
 ./vpn.sh               # sem argumento: troca para VPN_ENDPOINT se definido (env ou .env), senão menu numerado de endpoints com status
 ./vpn.sh france        # troca para o endpoint 'france'
@@ -40,7 +41,7 @@ cp .env.example .env
 - `VPN_ENDPOINT` (exemplo em `.env.example`): valor devolvido por `default_endpoint` (`vpn.sh`), com fallback `australia`.
 - Teste manual do proxy: `curl -x 127.0.0.1:8888 https://ifconfig.me`
 
-Ciclo de vida do container:
+Ciclo de vida do container (manual; o `init`/`switch` do `vpn.sh` já recriam sozinho):
 ```bash
 docker compose up -d
 docker compose logs --tail=50
