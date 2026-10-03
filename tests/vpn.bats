@@ -292,13 +292,13 @@ setup_conf() {
 @test "main sem argumento e com stdin fechado não loopa infinito" {
   # TSV fixture garante que render_menu passa e o caminho real de EOF (read) é exercitado;
   # timeout 5 aborta num eventual loop de EOF (rc 124 ≠ 1 → falha).
-  run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' timeout 5 '$VPN' </dev/null"
+  run bash -c "unset VPN_ENDPOINT; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' ENV_FILE=/nonexistent timeout 5 '$VPN' </dev/null"
   [ "$status" -eq 1 ]
   [[ "$output" == *"entrada inválida"* ]]
 }
 
 @test "menu com TSV inexistente falha com erro de leitura sem loop" {
-  run bash -c "TSV=/nonexistent/x.tsv '$VPN' </dev/null"
+  run bash -c "unset VPN_ENDPOINT; TSV=/nonexistent/x.tsv ENV_FILE=/nonexistent '$VPN' </dev/null"
   [ "$status" -eq 1 ]
   [[ "$output" == *"não foi possível ler"* ]]
 }

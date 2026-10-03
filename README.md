@@ -22,7 +22,7 @@ cp .env.example .env
 # preencher .env a partir de ~/.secrets/fastestvpn-user.txt / fastestvpn-password.txt
 
 ./vpn.sh update        # baixa as configs do provedor e regenera endpoints.tsv
-./vpn.sh               # menu numerado de endpoints com status
+./vpn.sh               # sem argumento: troca para VPN_ENDPOINT se definido (env ou .env), senão menu numerado de endpoints com status
 ./vpn.sh france        # troca para o endpoint 'france'
 ./vpn.sh status        # endpoint ativo e health do container
 ```

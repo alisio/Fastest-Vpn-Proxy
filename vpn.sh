@@ -37,7 +37,7 @@ endpoint_get() {  # $1=id $2=coluna(host|ip|porta|proto|status)
 uso() {
   cat <<'EOF'
 Uso: vpn.sh [update | <id> [--force] | status | --help]
-  (sem argumento)  menu interativo
+  (sem argumento)  troca para VPN_ENDPOINT se definido (env ou .env); senão menu interativo
   <id> [--force]   troca para o endpoint; --force pula confirmação de status falha/ambiguo
   update           baixa configs do provedor e regenera endpoints.tsv
   status           mostra endpoint ativo e health
@@ -352,7 +352,7 @@ main() {
     -h|--help) uso ;;
     "")
       if [ -n "${VPN_ENDPOINT:-}" ]; then
-        cmd_switch "$VPN_ENDPOINT"
+        cmd_switch "$(default_endpoint)"
       else
         menu_interativo
       fi
