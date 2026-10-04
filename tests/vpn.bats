@@ -626,3 +626,85 @@ setup_init_env() {  # cria ENV_FILE com credenciais; ecoa o caminho
   grep -q "endpoint ativo: france" "$OUT/out"
   grep -q "trocando para 'france'" "$OUT/err"
 }
+
+@test "list_ok_ids lista apenas endpoints ok" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; list_ok_ids"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"australia"* ]]
+  [[ "$output" == *"france"* ]]
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; list_ok_ids | grep -c germany-dus1 || true"
+  [ "$output" == "0" ]
+}
+
+@test "pick_next_id exclui o ativo atual" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; pick_next_id france"
+  [ "$status" -eq 0 ]
+  [ "$output" == "australia" ]
+}
+
+@test "pick_next_id falha sem endpoint ok" {
+  OUT="$BATS_TEST_TMPDIR"
+  printf 'id\thost\tip\tporta\tproto\tstatus\tobs\nx\th\t1.2.3.4\t4443\tudp\tfalha\t-\n' > "$OUT/sem-ok.tsv"
+  run bash -c "source '$VPN'; TSV='$OUT/sem-ok.tsv'; pick_next_id"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"nenhum endpoint ok"* ]]
+}
+
+@test "cmd_rotate rejeita intervalo invalido" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; cmd_rotate --interval 0 --once"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"intervalo inválido"* ]]
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; cmd_rotate --interval abc --once"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"intervalo inválido"* ]]
+}
+
+@test "cmd_rotate --once troca uma vez (stub)" {
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_rotate --once"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DOCKER_CHAMADO"* ]]
+  [[ "$output" == *"endpoint ativo: "* ]]
+}
+
+@test "cmd_rotate --once com docker falho sai 1 sem loop" {
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='false'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_rotate --once"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"restaurando configurações anteriores"* ]]
+}
+
+@test "main despacha rotate --once" {
+  run bash -c "TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv' OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn' CONF_DEST='$BATS_TEST_TMPDIR' \
+    DOCKER_CMD='echo DOCKER_CHAMADO' HEALTH_CMD='echo healthy' CURL_CMD='echo 200' \
+    '$VPN' rotate --once"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"endpoint ativo: "* ]]
+}
+
+@test "cmd_rotate em loop sobrevive a sleep com falha e alterna endpoint" {
+  OUT="$BATS_TEST_TMPDIR"
+  echo 0 > "$OUT/cnt"
+  cat > "$OUT/sleep-stub.sh" <<EOF
+#!/usr/bin/env bash
+n=\$(cat "$OUT/cnt")
+echo \$((n+1)) > "$OUT/cnt"
+[ "\$n" -ge 1 ] && kill -TERM \$PPID
+exit 1
+EOF
+  chmod +x "$OUT/sleep-stub.sh"
+  # bash -e reproduz o set -e da execução real (./vpn.sh): sem a guarda
+  # "|| true" no sleep, o exit 1 do stub abortaria o loop no primeiro ciclo.
+  run bash -e -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    SLEEP_CMD='$OUT/sleep-stub.sh'; \
+    cmd_rotate --interval 1"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'endpoint ativo: ')" -eq 2 ]
+  [[ "$output" == *"endpoint ativo: australia"* ]]
+  [[ "$output" == *"endpoint ativo: france"* ]]
+}

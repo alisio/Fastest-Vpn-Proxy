@@ -38,11 +38,12 @@ endpoint_get() {  # $1=id $2=coluna(host|ip|porta|proto|status)
 
 uso() {
   cat <<'EOF'
-Uso: vpn.sh [init [--force] | update | <id> [--force] | status | version | --version | --help]
+Uso: vpn.sh [init [--force] | update | <id> [--force] | rotate [--interval MIN] [--once] [--force] | status | version | --version | --help]
   (sem argumento)  troca para VPN_ENDPOINT se definido (env ou .env); senão menu interativo
   <id> [--force]   troca para o endpoint; --force pula confirmação de status falha/ambiguo
   init [--force]  primeira subida: checa pré-reqs e .env, roda update e sobe o container
   update           baixa configs do provedor e regenera endpoints.tsv
+  rotate [--interval MIN] [--once] [--force]  chaveia periodicamente entre endpoints ok (padrão 30 min; Ctrl+C para parar)
   status           mostra endpoint ativo, health e versão
   version          mostra a versão do vpn.sh
 EOF
@@ -260,6 +261,90 @@ cmd_status() {
   health="$(eval "$cmd" 2>/dev/null)" || health=""
   echo "health: ${health:-indisponível}"
   echo "versão: $(cmd_version | awk '{print $2}')"
+}
+
+list_ok_ids() {  # imprime um id por linha com status == ok
+  awk -F'\t' 'NR>1 && $6=="ok" {print $1}' "$TSV"
+}
+
+active_id() {  # imprime o id do endpoint ativo (vazio se não detectável)
+  local conf remote host porta
+  if [ -n "${CUSTOM_RU:-}" ]; then
+    conf="$CUSTOM_RU"
+  elif [ -n "${CONF_DEST:-}" ]; then
+    conf="$CONF_DEST/custom-ru.conf"
+  else
+    conf="$SCRIPT_DIR/custom-ru.conf"
+  fi
+  [ -f "$conf" ] || return 0
+  remote="$(_conf_remote "$conf")" || return 0
+  read -r host porta <<< "$remote"
+  awk -F'\t' -v h="$host" -v p="$porta" \
+    'NR>1 && ($2==h || $3==h) && $4==p {print $1; exit}' "$TSV" 2>/dev/null || return 0
+}
+
+pick_next_id() {  # $1=excluir (opcional) → sorteia entre os ok menos o excluído
+  local excluir="${1:-}" todos candidatos n idx
+  todos="$(list_ok_ids)" || return 1
+  [ -n "$todos" ] || { echo "erro: nenhum endpoint ok em $TSV — rode ./vpn.sh update" >&2; return 1; }
+  if [ -n "$excluir" ]; then
+    candidatos="$(printf '%s\n' "$todos" | grep -vxF "$excluir" || true)"
+    if [ -z "$candidatos" ]; then
+      echo "aviso: único endpoint ok é o ativo ('$excluir') — aguardando próximo ciclo" >&2
+      return 2
+    fi
+  else
+    candidatos="$todos"
+  fi
+  n="$(printf '%s\n' "$candidatos" | wc -l)"
+  idx=$((RANDOM % n + 1))
+  printf '%s\n' "$candidatos" | sed -n "${idx}p"
+}
+
+cmd_rotate() {  # [--interval MIN] [--once] [--force] — rodízio entre endpoints ok
+  local intervalo="${ROTATE_INTERVAL:-30}" uma_vez="" forca="" secs id ativo rc
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --interval)
+        intervalo="${2:-}"; shift 2 || { echo "erro: --interval exige valor em minutos" >&2; return 1; }
+        ;;
+      --interval=?*)
+        intervalo="${1#--interval=}"; shift ;;
+      --once) uma_vez=1; shift ;;
+      --force) forca="--force"; shift ;;
+      -h|--help) uso; return 0 ;;
+      *) echo "erro: opção desconhecida: $1" >&2; return 1 ;;
+    esac
+  done
+  case "$intervalo" in
+    ''|*[!0-9]*|0) echo "erro: intervalo inválido: $intervalo (esperado inteiro positivo em minutos)" >&2; return 1 ;;
+  esac
+  if [ -n "$uma_vez" ]; then
+    ativo="$(active_id)"
+    if ! id="$(pick_next_id "$ativo")"; then
+      rc=$?
+      [ "$rc" -eq 2 ] && { echo "já no único endpoint ok: $ativo" >&2; return 0; }
+      return 1
+    fi
+    cmd_switch "$id" "$forca"
+    return $?
+  fi
+  trap 'echo "rodízio parado" >&2; exit 0' INT TERM
+  while true; do
+    ativo="$(active_id)"
+    if ! id="$(pick_next_id "$ativo")"; then
+      rc=$?
+      if [ "$rc" -eq 2 ]; then
+        : # só o ativo disponível — apenas aguarda
+      else
+        return 1
+      fi
+    elif ! cmd_switch "$id" "$forca"; then
+      echo "aviso: ciclo para '$id' falhou — mantido endpoint anterior; nova tentativa em ${intervalo} min" >&2
+    fi
+    secs=$((intervalo * 60))
+    eval "${SLEEP_CMD:-sleep $secs}" || true
+  done
 }
 
 _menu_id_by_number() {  # $1=n → id na ordem de exibição (ok primeiro)
@@ -555,6 +640,7 @@ main() {
     -*) uso >&2; return 1 ;;
     init) cmd_init "${2:-}" ;;
     update) cmd_update ;;
+    rotate) shift; cmd_rotate "$@" ;;
     status) cmd_status ;;
     version) cmd_version ;;
     *) cmd_switch "$@" ;;

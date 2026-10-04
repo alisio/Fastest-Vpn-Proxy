@@ -34,12 +34,14 @@ cp .env.example .env
 ./vpn.sh update        # baixa as configs do provedor e regenera endpoints.tsv
 ./vpn.sh               # sem argumento: troca para VPN_ENDPOINT se definido (env ou .env), senão menu compacto (ok primeiro, 4 colunas; Enter vazio usa o padrão)
 ./vpn.sh france        # troca para o endpoint 'france'
+./vpn.sh rotate [--interval MIN] [--once]  # rodízio periódico entre endpoints ok (padrão 30 min; Ctrl+C para parar)
 ./vpn.sh status        # endpoint ativo, health do container e versão
 ./vpn.sh --version     # versão do CLI (espelha VERSION; tags vX.Y.Z)
 ```
 
 - `endpoints.tsv`: tabela tab-separada com `id`, `host`, `ip`, `porta`, `proto`, `status` e `obs`; o `status` segue a semântica do `vpn.sh` (`curl_test` 200/302 + health: `ok` | `ambiguo` | `falha` | `nao-testado`).
 - Endpoints com status `falha`/`ambiguo` pedem confirmação antes da troca; `./vpn.sh <id> --force` pula a confirmação.
+- `rotate` sorteia a cada ciclo um endpoint `ok` diferente do ativo (falha num ciclo mantém o atual e tenta de novo no próximo; `--interval` em minutos ou env `ROTATE_INTERVAL`, padrão 30; `--once` faz uma única troca).
 - `VPN_ENDPOINT` (exemplo em `.env.example`): valor devolvido por `default_endpoint` (`vpn.sh`), com fallback `australia`.
 - Teste manual do proxy: `curl -x 127.0.0.1:8888 https://ifconfig.me`
 
