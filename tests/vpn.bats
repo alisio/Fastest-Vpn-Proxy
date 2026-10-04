@@ -564,3 +564,65 @@ setup_init_env() {  # cria ENV_FILE com credenciais; ecoa o caminho
   [ "$status" -eq 0 ]
   [[ "$output" == *"DOCKER_CHAMADO"* ]]
 }
+
+@test "render_menu agrupa ok primeiro em 4 colunas" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; render_menu"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Endpoints saudáveis"* ]]
+  [[ "$output" == *"Outros:"* ]]
+  [[ "$output" == *"1) australia"* ]]
+  [[ "$output" == *"2) france"* ]]
+  [[ "$output" == *"ambiguo"* ]]
+}
+
+@test "menu_interativo enter vazio usa default_endpoint" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; VPN_ENDPOINT=france; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$BATS_TEST_TMPDIR'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    menu_interativo <<< ''"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"usando padrão: france"* ]]
+  [[ "$output" == *"endpoint ativo: france"* ]]
+}
+
+@test "menu_interativo rejeita numero fora da faixa com intervalo" {
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; menu_interativo <<< '99'"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"entrada inválida: 99 (esperado 1-3)"* ]]
+}
+
+@test "cmd_version imprime versao do arquivo VERSION" {
+  run bash -c "source '$VPN'; VERSION_FILE='$REPO/VERSION'; cmd_version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == "vpn.sh $(cat "$REPO/VERSION")" ]]
+}
+
+@test "main --version e version funcionam" {
+  run bash -c "'$VPN' --version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == vpn.sh* ]]
+  run bash -c "'$VPN' version"
+  [ "$status" -eq 0 ]
+  [[ "$output" == vpn.sh* ]]
+  run bash -c "'$VPN' -V"
+  [ "$status" -eq 0 ]
+  [[ "$output" == vpn.sh* ]]
+}
+
+@test "cmd_status mostra versao" {
+  load_fixture_tsv
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$TSV'; CUSTOM_RU='$OUT/custom-ru.conf'; HEALTH_CMD='echo healthy'; VERSION_FILE='$REPO/VERSION'; \
+    generate_confs australia '$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn' '$OUT' && cmd_status"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"versão: "* ]]
+}
+
+@test "cmd_switch anuncia etapas no stderr sem poluir stdout" {
+  OUT="$BATS_TEST_TMPDIR"
+  run bash -c "source '$VPN'; TSV='$BATS_TEST_DIRNAME/fixtures/endpoints.tsv'; OVPN_SRC='$BATS_TEST_DIRNAME/fixtures/sample-udp.ovpn'; CONF_DEST='$OUT'; \
+    DOCKER_CMD='echo DOCKER_CHAMADO'; HEALTH_CMD='echo healthy'; CURL_CMD='echo 200'; \
+    cmd_switch france 1>'$OUT/out' 2>'$OUT/err'"
+  [ "$status" -eq 0 ]
+  grep -q "endpoint ativo: france" "$OUT/out"
+  grep -q "trocando para 'france'" "$OUT/err"
+}

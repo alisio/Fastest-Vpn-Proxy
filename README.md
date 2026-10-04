@@ -11,7 +11,8 @@ Ferramenta que protege a sua conexão com a internet por meio de uma rede privad
 A ferramenta também verifica se a conexão está funcionando a cada troca e atualiza a lista de endpoints quando o provedor muda as configurações.
 
 ## Conteúdo
-- `vpn.sh`: CLI de endpoints — menu interativo, troca por id, `update` do provedor e `status`.
+- `vpn.sh`: CLI de endpoints — menu interativo, troca por id, `update` do provedor, `status` e `version`.
+- `VERSION`: versão atual do CLI (`vpn.sh --version`); a tag `vX.Y.Z` na `main` espelha esse arquivo.
 - `endpoints.tsv`: índice tabulado de endpoints (colunas `id`, `host`, `ip`, `porta`, `proto`, `status`, `obs`); `status` ∈ `ok` | `falha` | `nao-testado` | `ambiguo`.
 - `docker-compose.yml`: `gluetun` (`qmcgaw/gluetun:latest`), `container_name: fastest-vpn-proxy`, `VPN_TYPE=openvpn`, `HTTPPROXY=on`, porta `127.0.0.1:8888` (`docker-compose.yml:10,20`).
 - `custom.conf`: snapshot da conf OpenVPN ativa (`remote auau.jumptoserver.com 4443`, `proto udp` — `custom.conf:2-3`).
@@ -31,9 +32,10 @@ cp .env.example .env
 
 ./vpn.sh init         # primeira subida: checa pré-reqs e .env, atualiza endpoints e sobe o container (idempotente; --force refaz)
 ./vpn.sh update        # baixa as configs do provedor e regenera endpoints.tsv
-./vpn.sh               # sem argumento: troca para VPN_ENDPOINT se definido (env ou .env), senão menu numerado de endpoints com status
+./vpn.sh               # sem argumento: troca para VPN_ENDPOINT se definido (env ou .env), senão menu compacto (ok primeiro, 4 colunas; Enter vazio usa o padrão)
 ./vpn.sh france        # troca para o endpoint 'france'
-./vpn.sh status        # endpoint ativo e health do container
+./vpn.sh status        # endpoint ativo, health do container e versão
+./vpn.sh --version     # versão do CLI (espelha VERSION; tags vX.Y.Z)
 ```
 
 - `endpoints.tsv`: tabela tab-separada com `id`, `host`, `ip`, `porta`, `proto`, `status` e `obs`; o `status` segue a semântica do `vpn.sh` (`curl_test` 200/302 + health: `ok` | `ambiguo` | `falha` | `nao-testado`).

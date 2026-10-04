@@ -3,6 +3,8 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TSV="${TSV:-$SCRIPT_DIR/endpoints.tsv}"
 ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/.env}"
+VERSION_FILE="${VERSION_FILE:-$SCRIPT_DIR/VERSION}"
+VERSION_DEFAULT="1.0.0"
 
 _load_env_vpn_endpoint() {  # VPN_ENDPOINT da env tem prioridade; senão lê do ENV_FILE
   if [ -n "${VPN_ENDPOINT:-}" ] || [ ! -f "$ENV_FILE" ]; then
@@ -36,13 +38,23 @@ endpoint_get() {  # $1=id $2=coluna(host|ip|porta|proto|status)
 
 uso() {
   cat <<'EOF'
-Uso: vpn.sh [init [--force] | update | <id> [--force] | status | --help]
+Uso: vpn.sh [init [--force] | update | <id> [--force] | status | version | --version | --help]
   (sem argumento)  troca para VPN_ENDPOINT se definido (env ou .env); senão menu interativo
   <id> [--force]   troca para o endpoint; --force pula confirmação de status falha/ambiguo
   init [--force]  primeira subida: checa pré-reqs e .env, roda update e sobe o container
   update           baixa configs do provedor e regenera endpoints.tsv
-  status           mostra endpoint ativo e health
+  status           mostra endpoint ativo, health e versão
+  version          mostra a versão do vpn.sh
 EOF
+}
+
+cmd_version() {
+  local ver=""
+  if [ -f "$VERSION_FILE" ]; then
+    ver="$(tr -d ' \t\r\n' < "$VERSION_FILE" 2>/dev/null)"
+  fi
+  [ -n "$ver" ] || ver="$VERSION_DEFAULT"
+  echo "vpn.sh $ver"
 }
 
 DEFAULT_ENDPOINT="australia"
@@ -134,9 +146,29 @@ _cleanup_backups() {  # $1=dir_destino
   rm -f "$1/custom.conf.bak" "$1/custom-ru.conf.bak"
 }
 
+_spinner_pid=""
+
+_spinner_start() {  # $1=mensagem (stderr, só em TTY)
+  local msg="$1"
+  if [ -t 2 ]; then
+    printf '%s ' "$msg" >&2
+    ( while :; do for c in '.' 'o' 'O' '@'; do printf '\b%s' "$c" >&2; sleep 0.2; done; done ) &
+    _spinner_pid=$!
+  fi
+}
+
+_spinner_stop() {
+  if [ -n "${_spinner_pid:-}" ]; then
+    kill "$_spinner_pid" 2>/dev/null || true
+    wait "$_spinner_pid" 2>/dev/null || true
+    _spinner_pid=""
+    printf '\b \n' >&2
+  fi
+}
+
 cmd_switch() {  # $1=id $2=--force (opcional, pula confirmação de status falha/ambiguo)
   local id="$1" forca="${2:-}"
-  local src dest status resp
+  local src dest status resp rc=0
   endpoint_exists "$id" || { echo "erro: endpoint '$id' não existe em $TSV" >&2; return 1; }
   status="$(endpoint_get "$id" status)"
   case "$status" in
@@ -163,7 +195,29 @@ cmd_switch() {  # $1=id $2=--force (opcional, pula confirmação de status falha
     _restore_confs "$dest" || echo "aviso: falha ao restaurar configurações em $dest" >&2
     return 1
   fi
-  if ! run_docker_up || ! wait_healthy || ! curl_test; then
+  echo "trocando para '$id'..." >&2
+  _spinner_start "subindo container..."
+  run_docker_up; rc=$?
+  _spinner_stop
+  if [ "$rc" -ne 0 ]; then
+    echo "erro: troca para '$id' falhou — restaurando configurações anteriores" >&2
+    _restore_confs "$dest" || echo "aviso: falha ao restaurar configurações em $dest" >&2
+    run_docker_up || echo "aviso: falha ao recriar container com confs restauradas" >&2
+    return 1
+  fi
+  _spinner_start "aguardando healthy..."
+  wait_healthy; rc=$?
+  _spinner_stop
+  if [ "$rc" -ne 0 ]; then
+    echo "erro: troca para '$id' falhou — restaurando configurações anteriores" >&2
+    _restore_confs "$dest" || echo "aviso: falha ao restaurar configurações em $dest" >&2
+    run_docker_up || echo "aviso: falha ao recriar container com confs restauradas" >&2
+    return 1
+  fi
+  _spinner_start "testando proxy..."
+  curl_test; rc=$?
+  _spinner_stop
+  if [ "$rc" -ne 0 ]; then
     echo "erro: troca para '$id' falhou — restaurando configurações anteriores" >&2
     _restore_confs "$dest" || echo "aviso: falha ao restaurar configurações em $dest" >&2
     run_docker_up || echo "aviso: falha ao recriar container com confs restauradas" >&2
@@ -205,22 +259,83 @@ cmd_status() {
   cmd="${HEALTH_CMD:-$DEFAULT_HEALTH_CMD}"
   health="$(eval "$cmd" 2>/dev/null)" || health=""
   echo "health: ${health:-indisponível}"
+  echo "versão: $(cmd_version | awk '{print $2}')"
 }
 
-render_menu() {  # imprime menu numerado (id + status), pulando o cabeçalho
-  awk -F'\t' 'NR>1 {printf "%d) %s\t%s\n", ++n, $1, $6}' "$TSV"
+_menu_id_by_number() {  # $1=n → id na ordem de exibição (ok primeiro)
+  awk -F'\t' -v n="$1" '
+    NR>1 { if ($6=="ok") ok[++c_ok]=$1; else resto[++c_resto]=$1 }
+    END {
+      if (n >= 1 && n <= c_ok) print ok[n];
+      else if (n > c_ok && n <= c_ok+c_resto) print resto[n-c_ok];
+    }' "$TSV"
+}
+
+_menu_total() {
+  awk -F'\t' 'NR>1 {n++} END {print n+0}' "$TSV"
+}
+
+render_menu() {  # menu compacto (ok primeiro, 4 colunas), pulando o cabeçalho
+  awk -F'\t' '
+    NR>1 {
+      label=$1
+      if ($6=="ambiguo" || $6=="falha") label=$1 " [" $6 "]"
+      if ($6=="ok") ok[++n_ok]=label
+      else resto[++n_resto]=label
+    }
+    END {
+      if (n_ok+n_resto == 0) exit 1
+      if (n_ok > 0) {
+        print "Endpoints saudáveis (ok) — recomendados:"
+        for (i=1; i<=n_ok; i++) {
+          ++n
+          printf " %3d) %-20s", n, ok[i]
+          if (n % 4 == 0) printf "\n"
+        }
+        if (n % 4 != 0) printf "\n"
+        if (n_resto > 0) printf "\n"
+      }
+      if (n_resto > 0) {
+        print "Outros:"
+        base=n
+        for (i=1; i<=n_resto; i++) {
+          ++n
+          printf " %3d) %-20s", n, resto[i]
+          if ((n-base) % 4 == 0) printf "\n"
+        }
+        if ((n-base) % 4 != 0) printf "\n"
+      }
+    }' "$TSV"
 }
 
 menu_interativo() {  # sem argumento: mostra o menu e troca para a escolha
-  local escolha id
+  local escolha id total padrao
   render_menu || { echo "erro: não foi possível ler $TSV — rode ./vpn.sh update" >&2; return 1; }
+  total="$(_menu_total)"
+  padrao="$(default_endpoint)"
+  printf 'Escolha [1-%s, padrão=%s]: ' "$total" "$padrao" >&2
   if ! IFS= read -r escolha; then
     echo "erro: entrada inválida" >&2
     return 1
   fi
-  id=$(awk -F'\t' -v n="$escolha" 'NR>1 && ++c==n {print $1; exit}' "$TSV")
+  escolha="$(printf '%s' "$escolha" | tr -d ' \t\r\n')"
+  if [ -z "$escolha" ]; then
+    echo "usando padrão: $padrao" >&2
+    id="$padrao"
+    endpoint_exists "$id" || { echo "erro: endpoint '$id' não existe em $TSV" >&2; return 1; }
+    cmd_switch "$id"
+    return $?
+  fi
+  case "$escolha" in
+    *[!0-9]*|"") echo "erro: entrada inválida: $escolha (esperado 1-$total)" >&2; return 1 ;;
+  esac
+  if [ "$escolha" -lt 1 ] || [ "$escolha" -gt "$total" ]; then
+    echo "erro: entrada inválida: $escolha (esperado 1-$total)" >&2
+    return 1
+  fi
+  id="$(_menu_id_by_number "$escolha")"
   if [ -z "$id" ]; then
-    echo "erro: entrada inválida: $escolha" >&2
+    echo "erro: entrada inválida: $escolha (esperado 1-$total)" >&2
     return 1
   fi
   cmd_switch "$id"
@@ -429,6 +544,7 @@ cmd_init() {  # [--force]
 main() {
   case "${1:-}" in
     -h|--help) uso ;;
+    --version|-V) cmd_version ;;
     "")
       if [ -n "${VPN_ENDPOINT:-}" ]; then
         cmd_switch "$(default_endpoint)"
@@ -440,6 +556,7 @@ main() {
     init) cmd_init "${2:-}" ;;
     update) cmd_update ;;
     status) cmd_status ;;
+    version) cmd_version ;;
     *) cmd_switch "$@" ;;
   esac
 }
